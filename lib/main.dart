@@ -54,6 +54,14 @@ class LoginPageState extends State<LoginPage> {
   final Logger logger = Logger();
 
   Future<void> _login() async {
+    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Por favor ingresa usuario y contraseña")),
+      );
+      return;
+    }
+
     try {
       final response = await http.post(
         Uri.parse("https://sistema.jusaimpulsemkt.com/api/login-app"),
@@ -77,6 +85,7 @@ class LoginPageState extends State<LoginPage> {
           final int userId = user["id"] ?? 0;
           final String userName = user["username"] ?? "Usuario";
 
+          if (!mounted) return;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (context) =>
@@ -84,6 +93,7 @@ class LoginPageState extends State<LoginPage> {
             ),
           );
         } else {
+          if (!mounted) return;
           setState(() {
             _responseMessage = mensaje.isNotEmpty ? mensaje : "Login fallido";
           });
@@ -92,6 +102,7 @@ class LoginPageState extends State<LoginPage> {
           ).showSnackBar(SnackBar(content: Text(_responseMessage)));
         }
       } else {
+        if (!mounted) return;
         setState(() {
           _responseMessage = "Error de conexión (${response.statusCode})";
         });
@@ -187,7 +198,9 @@ class DashboardPageState extends State<DashboardPage> {
   List<dynamic> _asignaciones = [];
   String _errorMessage = "";
   bool _loading = true;
-  File? _selectedImage;
+
+  // Fotos por asignación (final para evitar reasignación)
+  final Map<int, List<File>> _fotosPorAsignacion = {};
 
   @override
   void initState() {
@@ -208,11 +221,13 @@ class DashboardPageState extends State<DashboardPage> {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        if (!mounted) return;
         setState(() {
           _asignaciones = data["datos"] ?? [];
           _loading = false;
         });
       } else {
+        if (!mounted) return;
         setState(() {
           _errorMessage = "Error al cargar asignaciones";
           _loading = false;
@@ -230,31 +245,57 @@ class DashboardPageState extends State<DashboardPage> {
   Future<void> _takePhoto(dynamic asignacion) async {
     final ImagePicker picker = ImagePicker();
     final XFile? photo = await picker.pickImage(source: ImageSource.camera);
+
+    if (!mounted) return;
+
     if (photo != null) {
+      final asignacionId = asignacion["id"];
+      final nuevaFoto = File(photo.path);
+
       setState(() {
-        _selectedImage = File(photo.path);
+        _fotosPorAsignacion.putIfAbsent(asignacionId, () => []);
+        _fotosPorAsignacion[asignacionId]!.add(nuevaFoto);
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Foto guardada correctamente")),
+      );
     }
   }
 
   void _viewPhotos(dynamic asignacion) {
-    if (_selectedImage == null) {
+    final asignacionId = asignacion["id"];
+    final fotos = _fotosPorAsignacion[asignacionId] ?? [];
+
+    if (fotos.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("No hay fotos tomadas")));
       return;
     }
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => Scaffold(
           appBar: AppBar(title: const Text("Fotos tomadas")),
-          body: Center(child: Image.file(_selectedImage!)),
+          body: GridView.builder(
+            padding: const EdgeInsets.all(12),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+            ),
+            itemCount: fotos.length,
+            itemBuilder: (context, index) {
+              return Image.file(fotos[index]);
+            },
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildTable() {
+  Widget _buildList() {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_errorMessage.isNotEmpty) {
       return Center(
@@ -276,85 +317,47 @@ class DashboardPageState extends State<DashboardPage> {
       );
     }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowColor: WidgetStateProperty.all(const Color(0xFFE8F5E9)),
-        dataRowColor: WidgetStateProperty.resolveWith<Color?>((
-          Set<WidgetState> states,
-        ) {
-          if (states.contains(WidgetState.selected)) {
-            return Colors.green.withValues(alpha: 0.2);
-          }
-          return null;
-        }),
-        columns: const [
-          DataColumn(
-            label: Text("Fecha", style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-          DataColumn(
-            label: Text(
-              "Cliente",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          DataColumn(
-            label: Text("Plaza", style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-          DataColumn(
-            label: Text(
-              "Ubicación",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          DataColumn(
-            label: Text(
-              "Estatus",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          DataColumn(
-            label: Text(
-              "Acción",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-        rows: _asignaciones.map((asignacion) {
-          return DataRow(
-            cells: [
-              DataCell(Text(asignacion["fecha"] ?? "")),
-              DataCell(Text(asignacion["cliente"] ?? "")),
-              DataCell(Text(asignacion["plaza"] ?? "")),
-              DataCell(Text(asignacion["ciudad"] ?? "")),
-              DataCell(Text(asignacion["estatus"] ?? "")),
-              DataCell(
+    return ListView.builder(
+      itemCount: _asignaciones.length,
+      itemBuilder: (context, index) {
+        final asignacion = _asignaciones[index];
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          elevation: 3,
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Fecha: ${asignacion["fecha"] ?? ""}",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text("Cliente: ${asignacion["cliente"] ?? ""}"),
+                Text("Plaza: ${asignacion["plaza"] ?? ""}"),
+                Text("Ubicación: ${asignacion["ciudad"] ?? ""}"),
+                Text("Estatus: ${asignacion["estatus"] ?? ""}"),
+                const SizedBox(height: 10),
                 Row(
                   children: [
-                    Tooltip(
-                      message: "Tomar foto",
-                      child: IconButton(
-                        icon: const Icon(Icons.camera_alt, color: Colors.green),
-                        onPressed: () => _takePhoto(asignacion),
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.camera_alt, color: Colors.green),
+                      tooltip: "Tomar foto",
+                      onPressed: () => _takePhoto(asignacion),
                     ),
-                    Tooltip(
-                      message: "Ver fotos",
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.photo_library,
-                          color: Colors.blue,
-                        ),
-                        onPressed: () => _viewPhotos(asignacion),
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.photo_library, color: Colors.blue),
+                      tooltip: "Ver fotos",
+                      onPressed: () => _viewPhotos(asignacion),
                     ),
                   ],
                 ),
-              ),
-            ],
-          );
-        }).toList(),
-      ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -418,10 +421,9 @@ class DashboardPageState extends State<DashboardPage> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // Logo debajo del título
             Image.asset("assets/images/logo-jusa-2-opt.png", height: 80),
             const SizedBox(height: 20),
-            Expanded(child: _buildTable()),
+            Expanded(child: _buildList()),
           ],
         ),
       ),
