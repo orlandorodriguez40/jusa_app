@@ -198,7 +198,7 @@ class DashboardPageState extends State<DashboardPage> {
   List<dynamic> _asignaciones = [];
   String _errorMessage = "";
   bool _loading = true;
-  bool _sendingPhoto = false; // loader para envío
+  bool _sendingPhoto = false;
 
   final Map<int, List<File>> _fotosPorAsignacion = {};
 
@@ -242,7 +242,6 @@ class DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  // Ver fotos desde el servidor
   void _viewPhotos(dynamic asignacion) async {
     final asignacionId = asignacion["id"];
 
@@ -315,7 +314,7 @@ class DashboardPageState extends State<DashboardPage> {
       setState(() {
         _fotosPorAsignacion.putIfAbsent(asignacionId, () => []);
         _fotosPorAsignacion[asignacionId]!.add(nuevaFoto);
-        _sendingPhoto = true; // mostrar loader mientras se envía
+        _sendingPhoto = true;
       });
 
       try {
@@ -324,6 +323,7 @@ class DashboardPageState extends State<DashboardPage> {
           Uri.parse("https://sistema.jusaimpulsemkt.com/api/tomar-foto-app"),
         );
 
+        request.fields['asignacion_id'] = asignacionId.toString();
         request.files.add(
           await http.MultipartFile.fromPath('file', nuevaFoto.path),
         );
@@ -435,19 +435,13 @@ class DashboardPageState extends State<DashboardPage> {
             backgroundColor: const Color(0xFF424949),
             title: const Text(
               "PANEL",
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             actions: [
               PopupMenuButton<String>(
                 icon: const Icon(Icons.menu, color: Colors.white),
                 onSelected: (value) {
-                  if (value == "Salir") {
-                    Navigator.of(context).pop();
-                  }
+                  if (value == "Salir") Navigator.of(context).pop();
                 },
                 itemBuilder: (context) => const [
                   PopupMenuItem(
@@ -495,8 +489,6 @@ class DashboardPageState extends State<DashboardPage> {
             ),
           ),
         ),
-
-        // Overlay loader cuando se envía la foto
         if (_sendingPhoto)
           Positioned.fill(
             child: AbsorbPointer(
