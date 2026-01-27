@@ -198,8 +198,8 @@ class DashboardPageState extends State<DashboardPage> {
   List<dynamic> _asignaciones = [];
   String _errorMessage = "";
   bool _loading = true;
+  bool _sendingPhoto = false; // loader para envío
 
-  // Fotos por asignación (final para evitar reasignación)
   final Map<int, List<File>> _fotosPorAsignacion = {};
 
   @override
@@ -242,32 +242,12 @@ class DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  Future<void> _takePhoto(dynamic asignacion) async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? photo = await picker.pickImage(source: ImageSource.camera);
-
-    if (!mounted) return;
-
-    if (photo != null) {
-      final asignacionId = asignacion["id"];
-      final nuevaFoto = File(photo.path);
-
-      setState(() {
-        _fotosPorAsignacion.putIfAbsent(asignacionId, () => []);
-        _fotosPorAsignacion[asignacionId]!.add(nuevaFoto);
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Foto guardada correctamente")),
-      );
-    }
-  }
-
   void _viewPhotos(dynamic asignacion) {
     final asignacionId = asignacion["id"];
     final fotos = _fotosPorAsignacion[asignacionId] ?? [];
 
     if (fotos.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("No hay fotos tomadas")));
@@ -293,6 +273,64 @@ class DashboardPageState extends State<DashboardPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _takePhoto(dynamic asignacion) async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? photo = await picker.pickImage(source: ImageSource.camera);
+
+    if (!mounted) return;
+
+    if (photo != null) {
+      final asignacionId = asignacion["id"];
+      final nuevaFoto = File(photo.path);
+
+      setState(() {
+        _fotosPorAsignacion.putIfAbsent(asignacionId, () => []);
+        _fotosPorAsignacion[asignacionId]!.add(nuevaFoto);
+        _sendingPhoto = true; // mostrar loader mientras se envía
+      });
+
+      try {
+        final request = http.MultipartRequest(
+          'POST',
+          Uri.parse("https://sistema.jusaimpulsemkt.com/api/tomar-foto-app"),
+        );
+
+        request.files.add(
+          await http.MultipartFile.fromPath('file', nuevaFoto.path),
+        );
+
+        final response = await request.send();
+
+        if (!mounted) return;
+        setState(() {
+          _sendingPhoto = false;
+        });
+
+        if (response.statusCode == 200) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Foto tomada y enviada correctamente"),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Error al enviar la foto: ${response.statusCode}"),
+            ),
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _sendingPhoto = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Excepción al enviar la foto: $e")),
+        );
+      }
+    }
   }
 
   Widget _buildList() {
@@ -343,7 +381,7 @@ class DashboardPageState extends State<DashboardPage> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.camera_alt, color: Colors.green),
-                      tooltip: "Tomar foto",
+                      tooltip: "Tomar y enviar foto",
                       onPressed: () => _takePhoto(asignacion),
                     ),
                     IconButton(
@@ -363,70 +401,99 @@ class DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF424949),
-        title: const Text(
-          "PANEL",
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.menu, color: Colors.white),
-            onSelected: (value) {
-              if (value == "Salir") {
-                Navigator.of(context).pop();
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: "Asignaciones",
-                child: Row(
-                  children: [
-                    Icon(Icons.assignment),
-                    SizedBox(width: 8),
-                    Text("Asignaciones"),
-                  ],
-                ),
+    // Capa de loader sobre el contenido cuando _sendingPhoto es true
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: AppBar(
+            backgroundColor: const Color(0xFF424949),
+            title: const Text(
+              "PANEL",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
-              const PopupMenuItem(
-                value: "Perfil",
-                child: Row(
-                  children: [
-                    Icon(Icons.person),
-                    SizedBox(width: 8),
-                    Text("Perfil"),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: "Salir",
-                child: Row(
-                  children: [
-                    Icon(Icons.exit_to_app),
-                    SizedBox(width: 8),
-                    Text("Salir"),
-                  ],
-                ),
+            ),
+            actions: [
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.menu, color: Colors.white),
+                onSelected: (value) {
+                  if (value == "Salir") {
+                    Navigator.of(context).pop();
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: "Asignaciones",
+                    child: Row(
+                      children: [
+                        Icon(Icons.assignment),
+                        SizedBox(width: 8),
+                        Text("Asignaciones"),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: "Perfil",
+                    child: Row(
+                      children: [
+                        Icon(Icons.person),
+                        SizedBox(width: 8),
+                        Text("Perfil"),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: "Salir",
+                    child: Row(
+                      children: [
+                        Icon(Icons.exit_to_app),
+                        SizedBox(width: 8),
+                        Text("Salir"),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Image.asset("assets/images/logo-jusa-2-opt.png", height: 80),
-            const SizedBox(height: 20),
-            Expanded(child: _buildList()),
-          ],
+          body: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                Image.asset("assets/images/logo-jusa-2-opt.png", height: 80),
+                const SizedBox(height: 20),
+                Expanded(child: _buildList()),
+              ],
+            ),
+          ),
         ),
-      ),
+
+        // Overlay de carga
+        if (_sendingPhoto)
+          Positioned.fill(
+            child: AbsorbPointer(
+              absorbing: true,
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.35),
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 12),
+                      Text(
+                        "Enviando foto...",
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
