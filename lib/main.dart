@@ -242,37 +242,64 @@ class DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  void _viewPhotos(dynamic asignacion) {
+  // Ver fotos desde el servidor
+  void _viewPhotos(dynamic asignacion) async {
     final asignacionId = asignacion["id"];
-    final fotos = _fotosPorAsignacion[asignacionId] ?? [];
 
-    if (fotos.isEmpty) {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          "https://sistema.jusaimpulsemkt.com/api/fotos-asignacion-app/$asignacionId",
+        ),
+        headers: {"Accept": "application/json"},
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List fotosServidor = data["fotos"] ?? [];
+
+        if (fotosServidor.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("No hay fotos en el servidor")),
+          );
+          return;
+        }
+
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => Scaffold(
+              appBar: AppBar(title: const Text("Fotos en servidor")),
+              body: GridView.builder(
+                padding: const EdgeInsets.all(12),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                itemCount: fotosServidor.length,
+                itemBuilder: (context, index) {
+                  final fotoUrl = fotosServidor[index]["url"];
+                  return Image.network(fotoUrl, fit: BoxFit.cover);
+                },
+              ),
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error al cargar fotos: ${response.statusCode}"),
+          ),
+        );
+      }
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("No hay fotos tomadas")));
-      return;
+      ).showSnackBar(SnackBar(content: Text("Excepción al cargar fotos: $e")));
     }
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => Scaffold(
-          appBar: AppBar(title: const Text("Fotos tomadas")),
-          body: GridView.builder(
-            padding: const EdgeInsets.all(12),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-            ),
-            itemCount: fotos.length,
-            itemBuilder: (context, index) {
-              return Image.file(fotos[index]);
-            },
-          ),
-        ),
-      ),
-    );
   }
 
   Future<void> _takePhoto(dynamic asignacion) async {
@@ -386,7 +413,7 @@ class DashboardPageState extends State<DashboardPage> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.photo_library, color: Colors.blue),
-                      tooltip: "Ver fotos",
+                      tooltip: "Ver fotos en servidor",
                       onPressed: () => _viewPhotos(asignacion),
                     ),
                   ],
@@ -401,7 +428,6 @@ class DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Capa de loader sobre el contenido cuando _sendingPhoto es true
     return Stack(
       children: [
         Scaffold(
@@ -470,7 +496,7 @@ class DashboardPageState extends State<DashboardPage> {
           ),
         ),
 
-        // Overlay de carga
+        // Overlay loader cuando se envía la foto
         if (_sendingPhoto)
           Positioned.fill(
             child: AbsorbPointer(
