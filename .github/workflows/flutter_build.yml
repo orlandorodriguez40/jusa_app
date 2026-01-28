@@ -1,75 +1,48 @@
-name: Flutter CI/CD
+name: Flutter Release
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
+    tags:
+      - 'v*'  # Cada vez que hagas push a un tag como v16, v17, etc.
 
 jobs:
-  build:
+  build-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # Necesario para crear releases
+      packages: write
+      actions: write
+
+    env:
+      FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.38.8-x64
+      PUB_CACHE: /home/runner/.pub-cache
 
     steps:
-      # 1. Checkout
-      - name: Checkout source
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      # 2. Set up Java (necesario para Android)
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      # 3. Setup Flutter
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
-          cache: true
+          flutter-version: '3.38.8'
 
-      # 4. Flutter doctor (debug)
-      - name: Flutter Doctor
-        run: flutter doctor -v
-
-      # 5. Install dependencies
       - name: Install dependencies
         run: flutter pub get
 
-      # 6. Build APK (release)
-      - name: Build APK (release)
+      - name: Build APK
         run: flutter build apk --release
 
-      # 7. Build AppBundle (AAB)
-      - name: Build AppBundle (release)
+      - name: Build AAB
         run: flutter build appbundle --release
 
-      # 8. Subir APK como artefacto
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
         with:
-          name: app-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-
-      # 9. Subir AAB como artefacto
-      - name: Upload AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-aab
-          path: build/app/outputs/bundle/release/app-release.aab
-
-      # 10. Crear Release en GitHub
-      - name: GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ github.run_number }}
-          name: "Flutter Release #${{ github.run_number }}"
+          tag: ${{ github.ref_name }}
+          name: Flutter Release ${{ github.ref_name }}
           draft: false
           prerelease: false
           files: |
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/bundle/release/app-release.aab
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}

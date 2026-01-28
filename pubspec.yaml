@@ -1,26 +1,41 @@
-name: login_app
-description: "App de login y panel para tomar y enviar fotos por asignación."
-publish_to: 'none'
-
+name: jusaimpulse_app
+description: Aplicación móvil JusaImpulse MKT - Gestión de asignaciones y fotos
+publish_to: 'none' # No publicar en pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.8.1
+  sdk: ">=2.19.0 <3.0.0"
+  flutter: ">=3.0.0"
+
 dependencies:
   flutter:
     sdk: flutter
-  http: ^1.2.0
-  image_picker: ^1.0.7
-  logger: ^2.0.2
-  cupertino_icons: ^1.0.8
-  cached_network_image: ^3.2.3
-  photo_view: ^0.15.0
+
+  # Íconos y diseño
+  cupertino_icons: ^1.0.5
+
+  # HTTP requests
+  http: ^1.1.0
+
+  # Tomar fotos
+  image_picker: ^0.8.7+5
+
+  # Logs
+  logger: ^1.2.1
+
+  # Guardar archivos localmente (opcional pero útil para fotos)
+  path_provider: ^2.0.14
+  path: ^1.8.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+
+  flutter_lints: ^2.0.1
+
 flutter:
   uses-material-design: true
+
+  # Assets de la app
   assets:
     - assets/images/logo-jusa-2-opt.png
