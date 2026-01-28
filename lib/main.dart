@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:logger/logger.dart';
 
@@ -303,7 +302,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
     if (photo != null) {
       final asignacionId = asignacion["id"];
-      final File nuevaFoto = File(photo.path);
+      final bytes = await photo.readAsBytes();
 
       setState(() {
         _sendingPhoto = true;
@@ -317,12 +316,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
         request.fields['asignacion_id'] = asignacionId.toString();
         request.files.add(
-          await http.MultipartFile.fromPath('file', nuevaFoto.path),
+          http.MultipartFile.fromBytes('file', bytes, filename: photo.name),
         );
 
-        logger.i(
-          "Enviando foto: ${nuevaFoto.path} para asignacion $asignacionId",
-        );
+        logger.i("Enviando foto: ${photo.path} para asignacion $asignacionId");
 
         final response = await request.send();
 
@@ -438,7 +435,9 @@ class _DashboardPageState extends State<DashboardPage> {
               PopupMenuButton<String>(
                 icon: const Icon(Icons.menu, color: Colors.white),
                 onSelected: (value) {
-                  if (value == "Salir") Navigator.of(context).pop();
+                  if (value == "Salir") {
+                    Navigator.of(context).pop();
+                  }
                 },
                 itemBuilder: (context) => const [
                   PopupMenuItem(
@@ -512,4 +511,3 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 }
-// trigger workflow
