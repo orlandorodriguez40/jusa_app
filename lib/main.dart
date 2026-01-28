@@ -192,6 +192,7 @@ class _DashboardPageState extends State<DashboardPage> {
   String _errorMessage = "";
   bool _loading = true;
   bool _sendingPhoto = false;
+  final Logger logger = Logger();
 
   @override
   void initState() {
@@ -233,6 +234,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _viewPhotos(dynamic asignacion) async {
     final asignacionId = asignacion["id"];
+
     try {
       final response = await http.get(
         Uri.parse(
@@ -259,7 +261,7 @@ class _DashboardPageState extends State<DashboardPage> {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => Scaffold(
-              appBar: AppBar(title: const Text("Fotos en servidor")),
+              appBar: AppBar(title: const Text("Fotos tomadas")),
               body: GridView.builder(
                 padding: const EdgeInsets.all(12),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -270,7 +272,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 itemCount: fotosServidor.length,
                 itemBuilder: (context, index) {
                   final fotoUrl =
-                      "https://sistema.jusaimpulsemkt.com/api/${fotosServidor[index]["foto"]}";
+                      "https://sistema.jusaimpulsemkt.com/${fotosServidor[index]["foto"]}";
                   return Image.network(fotoUrl, fit: BoxFit.cover);
                 },
               ),
@@ -297,44 +299,59 @@ class _DashboardPageState extends State<DashboardPage> {
     final ImagePicker picker = ImagePicker();
     final XFile? photo = await picker.pickImage(source: ImageSource.camera);
 
-    if (!mounted || photo == null) return;
+    if (!mounted) return;
 
-    setState(() => _sendingPhoto = true);
+    if (photo != null) {
+      final asignacionId = asignacion["id"];
+      final File nuevaFoto = File(photo.path);
 
-    try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse("https://sistema.jusaimpulsemkt.com/api/tomar-foto-app"),
-      );
+      setState(() {
+        _sendingPhoto = true;
+      });
 
-      request.fields['asignacion_id'] = asignacion["id"].toString();
-      request.files.add(
-        await http.MultipartFile.fromPath('file', File(photo.path).path),
-      );
-
-      final response = await request.send();
-
-      if (!mounted) return;
-      setState(() => _sendingPhoto = false);
-
-      if (response.statusCode == 200) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Foto enviada correctamente")),
+      try {
+        final request = http.MultipartRequest(
+          'POST',
+          Uri.parse("https://sistema.jusaimpulsemkt.com/api/tomar-foto-app"),
         );
-      } else {
-        final respStr = await response.stream.bytesToString();
+
+        request.fields['asignacion_id'] = asignacionId.toString();
+        request.files.add(
+          await http.MultipartFile.fromPath('file', nuevaFoto.path),
+        );
+
+        logger.i(
+          "Enviando foto: ${nuevaFoto.path} para asignacion $asignacionId",
+        );
+
+        final response = await request.send();
+
         if (!mounted) return;
+        setState(() {
+          _sendingPhoto = false;
+        });
+
+        if (response.statusCode == 200) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Foto enviada correctamente")),
+          );
+        } else {
+          final respStr = await response.stream.bytesToString();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error al enviar la foto: $respStr")),
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _sendingPhoto = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al enviar la foto: $respStr")),
+          SnackBar(content: Text("Excepción al enviar la foto: $e")),
         );
       }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _sendingPhoto = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Excepción al enviar la foto: $e")),
-      );
     }
   }
 
@@ -366,6 +383,7 @@ class _DashboardPageState extends State<DashboardPage> {
       itemCount: _asignaciones.length,
       itemBuilder: (context, index) {
         final asignacion = _asignaciones[index];
+
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 8),
           elevation: 3,
@@ -473,7 +491,7 @@ class _DashboardPageState extends State<DashboardPage> {
             child: AbsorbPointer(
               absorbing: true,
               child: Container(
-                color: Colors.black.withAlpha((0.35 * 255).round()),
+                color: const Color.fromRGBO(0, 0, 0, 0.35),
                 child: const Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
