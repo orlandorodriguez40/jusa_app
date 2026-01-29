@@ -52,7 +52,7 @@ jobs:
         run: flutter clean
 
       - name: Build APK (Release)
-        run: flutter build apk --release --split-per-abi=false
+        run: flutter build apk --release
 
       - name: Build AAB (Release)
         run: flutter build appbundle --release
