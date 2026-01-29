@@ -21,11 +21,11 @@ dependencies:
   image_picker: ^0.8.7+5
 
   # Logs
-  logger: ^1.2.1
+  logger: ^2.3.0
 
   # Guardar archivos localmente (opcional pero útil para fotos)
   path_provider: ^2.0.14
-  path: ^1.8.3
+  path: ^1.8.3  
 
 dev_dependencies:
   flutter_test:
