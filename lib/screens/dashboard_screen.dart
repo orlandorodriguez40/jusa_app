@@ -64,7 +64,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // ----------------------- Tomar foto -----------------------
+  // ----------------------- Tomar foto (CORREGIDA) -----------------------
   Future<void> _takePhoto(dynamic asignacion) async {
     final ImagePicker picker = ImagePicker();
     final XFile? photo = await picker.pickImage(source: ImageSource.camera);
@@ -92,18 +92,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final response = await request.send();
 
         if (!mounted) return;
-        setState(() => _sendingPhoto = false);
 
         if (response.statusCode == 200) {
-          _showSnackBar("Foto enviada correctamente");
+          _showSnackBar("✅ Foto enviada correctamente");
+
+          // 🔥 SOLUCIÓN: Recargar lista inmediatamente después del upload
+          setState(() => _loading = true);
+          await _fetchAsignaciones(); // ← RECARGA LA LISTA
+          setState(() => _loading = false);
         } else {
+          // ✅ CORREGIDO: Usar la variable respStr
           final respStr = await response.stream.bytesToString();
-          _showSnackBar("Error al enviar la foto: $respStr");
+          _showSnackBar(
+              "❌ Error al enviar la foto: ${response.statusCode} - $respStr");
         }
       } catch (e) {
         if (!mounted) return;
-        setState(() => _sendingPhoto = false);
-        _showSnackBar("Excepción al enviar la foto: $e");
+        _showSnackBar("❌ Excepción al enviar la foto: $e");
+      } finally {
+        if (mounted) {
+          setState(() => _sendingPhoto = false);
+        }
       }
     }
   }
@@ -189,9 +198,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.camera_alt, color: Colors.green),
+                      icon: _sendingPhoto
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.camera_alt, color: Colors.green),
                       tooltip: "Tomar",
-                      onPressed: () => _takePhoto(asignacion),
+                      onPressed:
+                          _sendingPhoto ? null : () => _takePhoto(asignacion),
                     ),
                     IconButton(
                       icon: const Icon(Icons.photo_library, color: Colors.blue),
