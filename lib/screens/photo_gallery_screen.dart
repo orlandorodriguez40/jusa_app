@@ -1,24 +1,15 @@
-// import 'dart:io';
 import 'package:flutter/material.dart';
 
 class PhotoGalleryScreen extends StatelessWidget {
   final List<dynamic> fotosServidor;
+
+  static const String baseImageUrl =
+      "https://sistema.jusaimpulsemkt.com/storage/";
+
   const PhotoGalleryScreen({super.key, required this.fotosServidor});
 
   @override
   Widget build(BuildContext context) {
-    if (fotosServidor.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: const Text("Fotos tomadas")),
-        body: const Center(
-          child: Text(
-            "No hay fotos disponibles",
-            style: TextStyle(fontSize: 16, color: Colors.black54),
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(title: const Text("Fotos tomadas")),
       body: GridView.builder(
@@ -30,27 +21,24 @@ class PhotoGalleryScreen extends StatelessWidget {
         ),
         itemCount: fotosServidor.length,
         itemBuilder: (context, index) {
-          String? fotoPath = fotosServidor[index]["foto"];
-
-          // Para Windows: usa placeholder si la URL no existe o falla
-          final String imageUrl = (fotoPath != null && fotoPath.isNotEmpty)
-              ? "https://sistema.jusaimpulsemkt.com/$fotoPath"
-              : "https://via.placeholder.com/150";
+          final String ruta = fotosServidor[index]["foto"] ?? "";
+          final String imageUrl = "$baseImageUrl$ruta";
 
           return Image.network(
             imageUrl,
+            key: ValueKey(imageUrl),
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              // Si falla la carga de la imagen, mostrar placeholder
-              return Image.network(
-                "https://via.placeholder.com/150",
-                fit: BoxFit.cover,
-              );
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return const Center(child: CircularProgressIndicator());
             },
+            errorBuilder: (_, __, ___) => const Icon(
+              Icons.broken_image,
+              size: 40,
+            ),
           );
         },
       ),
     );
   }
 }
-// Fin

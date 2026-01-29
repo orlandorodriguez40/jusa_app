@@ -14,7 +14,11 @@ class FotosAsignacionPage extends StatefulWidget {
 }
 
 class _FotosAsignacionPageState extends State<FotosAsignacionPage> {
-  final logger = Logger(); // Inicializa Logger
+  final logger = Logger();
+
+  static const String baseImageUrl =
+      "https://sistema.jusaimpulsemkt.com/storage/";
+
   List<String> fotosUrls = [];
   bool cargando = true;
   int fotoSeleccionada = 0;
@@ -28,47 +32,37 @@ class _FotosAsignacionPageState extends State<FotosAsignacionPage> {
   Future<void> _cargarFotos() async {
     final url =
         'https://sistema.jusaimpulsemkt.com/api/fotos-asignacion-app/${widget.idAsignacion}';
+
     try {
       final response = await http.get(Uri.parse(url));
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
-        // --- LOGGER: mostrar lo que viene del backend
-        for (var item in data['datos']) {
-          logger.i('FOTO RAW => ${item['foto']}');
-        }
-
-        if (data['estatus'] == true) {
+        if (data['estatus'] == true && data['datos'] != null) {
           setState(() {
-            fotosUrls = List<String>.from(data['datos'].map((item) {
-              // Limpiar posibles caracteres extra
-              String ruta = item['foto'].toString().trim();
-              ruta = ruta.replaceAll('<', '').replaceAll('>', '');
-              final urlFinal =
-                  'https://sistema.jusaimpulsemkt.com/storage/$ruta';
-              logger.i('URL FINAL => $urlFinal');
-              return urlFinal;
-            }));
+            fotosUrls = List<String>.from(
+              data['datos'].map((item) {
+                String ruta = item['foto'].toString().trim();
+                final urlFinal = "$baseImageUrl$ruta";
+                logger.i("URL IMAGEN => $urlFinal");
+                return urlFinal;
+              }),
+            );
             cargando = false;
           });
         } else {
-          setState(() {
-            cargando = false;
-          });
-          logger.w('API respondió con estatus false');
+          cargando = false;
         }
       } else {
-        setState(() {
-          cargando = false;
-        });
-        logger.e('Error en response.statusCode: ${response.statusCode}');
-      }
-    } catch (e, stacktrace) {
-      setState(() {
         cargando = false;
-      });
-      logger.e('Error al cargar fotos', error: e, stackTrace: stacktrace);
+        logger.e("StatusCode: ${response.statusCode}");
+      }
+    } catch (e, stack) {
+      cargando = false;
+      logger.e("Error cargando fotos", error: e, stackTrace: stack);
     }
+    if (mounted) setState(() {});
   }
 
   @override
@@ -78,26 +72,27 @@ class _FotosAsignacionPageState extends State<FotosAsignacionPage> {
       body: cargando
           ? const Center(child: CircularProgressIndicator())
           : fotosUrls.isEmpty
-              ? const Center(child: Text('No hay fotos disponibles'))
+              ? const Center(child: Text("No hay fotos disponibles"))
               : Column(
                   children: [
-                    // Imagen principal
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.all(8.0),
+                        padding: const EdgeInsets.all(8),
                         child: Image.network(
                           fotosUrls[fotoSeleccionada],
+                          key: ValueKey(fotosUrls[fotoSeleccionada]),
                           fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const Center(
-                                  child: Text('No se pudo cargar la imagen')),
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return const Center(
+                                child: CircularProgressIndicator());
+                          },
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Text("No se pudo cargar la imagen"),
+                          ),
                         ),
                       ),
                     ),
-
-                    const SizedBox(height: 10),
-
-                    // Miniaturas
                     SizedBox(
                       height: 80,
                       child: ListView.builder(
@@ -114,28 +109,28 @@ class _FotosAsignacionPageState extends State<FotosAsignacionPage> {
                               margin: const EdgeInsets.symmetric(horizontal: 5),
                               decoration: BoxDecoration(
                                 border: Border.all(
-                                    color: fotoSeleccionada == index
-                                        ? Colors.blue
-                                        : Colors.grey,
-                                    width: 2),
+                                  color: fotoSeleccionada == index
+                                      ? Colors.blue
+                                      : Colors.grey,
+                                  width: 2,
+                                ),
                               ),
                               child: Image.network(
                                 fotosUrls[index],
+                                key: ValueKey(fotosUrls[index]),
                                 width: 80,
                                 height: 80,
                                 fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(Icons.broken_image, size: 40),
+                                errorBuilder: (_, __, ___) =>
+                                    const Icon(Icons.broken_image),
                               ),
                             ),
                           );
                         },
                       ),
                     ),
-                    const SizedBox(height: 10),
                   ],
                 ),
     );
   }
 }
-// Fin
