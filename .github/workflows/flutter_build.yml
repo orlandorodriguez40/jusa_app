@@ -1,48 +1,89 @@
-name: Flutter Release
+name: Flutter Release CI
 
 on:
   push:
+    branches:
+      - main
     tags:
-      - 'v*'  # Cada vez que hagas push a un tag como v16, v17, etc.
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build-release:
     runs-on: ubuntu-latest
+
     permissions:
-      contents: write   # Necesario para crear releases
-      packages: write
+      contents: write
       actions: write
 
     env:
-      FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.38.8-x64
-      PUB_CACHE: /home/runner/.pub-cache
+      FLUTTER_VERSION: '3.38.8'
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.8'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --release
+      # ===============================
+      # 🔐 Decode keystore from secrets
+      # ===============================
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
 
-      - name: Build AAB
+      - name: Create key.properties
+        run: |
+          echo "storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}" > android/key.properties
+          echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> android/key.properties
+          echo "storeFile=upload-keystore.jks" >> android/key.properties
+
+      # ===============================
+      # 🧹 Clean & Build
+      # ===============================
+      - name: Flutter clean
+        run: flutter clean
+
+      - name: Build APK (Release)
+        run: flutter build apk --release --split-per-abi=false
+
+      - name: Build AAB (Release)
         run: flutter build appbundle --release
 
+      # ===============================
+      # 📦 Upload Artifacts
+      # ===============================
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+
+      # ===============================
+      # 🚀 Create GitHub Release (ONLY TAGS)
+      # ===============================
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.ref_name }}
           name: Flutter Release ${{ github.ref_name }}
           draft: false
           prerelease: false
-          files: |
+          artifacts: |
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/bundle/release/app-release.aab
           token: ${{ secrets.GITHUB_TOKEN }}
