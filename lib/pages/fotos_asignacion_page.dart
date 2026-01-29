@@ -32,10 +32,23 @@ class _FotosAsignacionPageState extends State<FotosAsignacionPage> {
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+
+        // --- LOGGER: mostrar lo que viene del backend
+        for (var item in data['datos']) {
+          logger.i('FOTO RAW => ${item['foto']}');
+        }
+
         if (data['estatus'] == true) {
           setState(() {
-            fotosUrls = List<String>.from(data['datos'].map((item) =>
-                'https://sistema.jusaimpulsemkt.com/storage/${item['foto']}'));
+            fotosUrls = List<String>.from(data['datos'].map((item) {
+              // Limpiar posibles caracteres extra
+              String ruta = item['foto'].toString().trim();
+              ruta = ruta.replaceAll('<', '').replaceAll('>', '');
+              final urlFinal =
+                  'https://sistema.jusaimpulsemkt.com/storage/$ruta';
+              logger.i('URL FINAL => $urlFinal');
+              return urlFinal;
+            }));
             cargando = false;
           });
         } else {
@@ -54,7 +67,6 @@ class _FotosAsignacionPageState extends State<FotosAsignacionPage> {
       setState(() {
         cargando = false;
       });
-      // Logger con argumentos nombrados
       logger.e('Error al cargar fotos', error: e, stackTrace: stacktrace);
     }
   }
