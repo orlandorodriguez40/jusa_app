@@ -3,6 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 
+/// ---------------- MODELO INTERNO ----------------
+class FotoItem {
+  final int id; // ID real de la foto (ej: 55)
+  final String url; // URL completa
+  bool seleccionada;
+
+  FotoItem({
+    required this.id,
+    required this.url,
+    this.seleccionada = false,
+  });
+}
+
+/// ---------------- PANTALLA ----------------
 class FotosAsignacionPage extends StatefulWidget {
   final int idAsignacion;
 
@@ -14,13 +28,14 @@ class FotosAsignacionPage extends StatefulWidget {
 }
 
 class _FotosAsignacionPageState extends State<FotosAsignacionPage> {
-  final logger = Logger();
+  final Logger logger = Logger();
 
   static const String baseImageUrl =
       "https://sistema.jusaimpulsemkt.com/storage/";
 
-  List<String> fotosUrls = [];
+  List<FotoItem> fotos = [];
   bool cargando = true;
+  bool eliminando = false;
   int fotoSeleccionada = 0;
 
   @override
@@ -29,9 +44,10 @@ class _FotosAsignacionPageState extends State<FotosAsignacionPage> {
     _cargarFotos();
   }
 
+  /// ---------------- CARGAR FOTOS ----------------
   Future<void> _cargarFotos() async {
     final url =
-        'https://sistema.jusaimpulsemkt.com/api/fotos-asignacion-app/${widget.idAsignacion}';
+        "https://sistema.jusaimpulsemkt.com/api/fotos-asignacion-app/${widget.idAsignacion}";
 
     try {
       final response = await http.get(Uri.parse(url));
@@ -39,96 +55,148 @@ class _FotosAsignacionPageState extends State<FotosAsignacionPage> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
-        if (data['estatus'] == true && data['datos'] != null) {
-          setState(() {
-            fotosUrls = List<String>.from(
-              data['datos'].map((item) {
-                String ruta = item['foto'].toString().trim();
-                final urlFinal = "$baseImageUrl$ruta";
-                logger.i("URL IMAGEN => $urlFinal");
-                return urlFinal;
-              }),
-            );
-            cargando = false;
-          });
-        } else {
-          cargando = false;
+        if (data["estatus"] == true && data["datos"] != null) {
+          fotos = List<FotoItem>.from(
+            data["datos"].map((item) {
+              return FotoItem(
+                id: item["id"], // 👈 ID DE LA FOTO
+                url: "$baseImageUrl${item["foto"]}",
+              );
+            }),
+          );
         }
-      } else {
-        cargando = false;
-        logger.e("StatusCode: ${response.statusCode}");
       }
     } catch (e, stack) {
-      cargando = false;
       logger.e("Error cargando fotos", error: e, stackTrace: stack);
     }
+
+    cargando = false;
     if (mounted) setState(() {});
   }
 
+  /// ---------------- ELIMINAR FOTOS ----------------
+  Future<void> _eliminarSeleccionadas() async {
+    final seleccionadas = fotos.where((f) => f.seleccionada).toList();
+
+    if (seleccionadas.isEmpty) return;
+
+    setState(() => eliminando = true);
+
+    try {
+      for (final foto in seleccionadas) {
+        final response = await http.delete(
+          Uri.parse(
+              "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/${foto.id}"),
+          headers: {"Accept": "application/json"},
+        );
+
+        if (response.statusCode != 200) {
+          logger.w("No se pudo eliminar foto ID ${foto.id}");
+        }
+      }
+
+      // Eliminar de la UI
+      fotos.removeWhere((f) => f.seleccionada);
+      fotoSeleccionada = 0;
+    } catch (e, stack) {
+      logger.e("Error eliminando fotos", error: e, stackTrace: stack);
+    }
+
+    eliminando = false;
+    if (mounted) setState(() {});
+  }
+
+  /// ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Fotos Asignación ${widget.idAsignacion}')),
+      appBar: AppBar(
+        title: Text("Fotos Asignación ${widget.idAsignacion}"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete),
+            tooltip: "Eliminar seleccionadas",
+            onPressed: eliminando ? null : _eliminarSeleccionadas,
+          )
+        ],
+      ),
       body: cargando
           ? const Center(child: CircularProgressIndicator())
-          : fotosUrls.isEmpty
+          : fotos.isEmpty
               ? const Center(child: Text("No hay fotos disponibles"))
               : Column(
                   children: [
+                    // ---------- IMAGEN PRINCIPAL ----------
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.all(8),
                         child: Image.network(
-                          fotosUrls[fotoSeleccionada],
-                          key: ValueKey(fotosUrls[fotoSeleccionada]),
+                          fotos[fotoSeleccionada].url,
+                          key: ValueKey(fotos[fotoSeleccionada].url),
                           fit: BoxFit.contain,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return const Center(
-                                child: CircularProgressIndicator());
-                          },
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Text("No se pudo cargar la imagen"),
-                          ),
+                          errorBuilder: (_, __, ___) =>
+                              const Center(child: Text("No se pudo cargar")),
                         ),
                       ),
                     ),
+
+                    // ---------- MINIATURAS + CHECKLIST ----------
                     SizedBox(
-                      height: 80,
+                      height: 120,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
-                        itemCount: fotosUrls.length,
+                        itemCount: fotos.length,
                         itemBuilder: (context, index) {
+                          final foto = fotos[index];
+
                           return GestureDetector(
                             onTap: () {
                               setState(() {
                                 fotoSeleccionada = index;
                               });
                             },
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 5),
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: fotoSeleccionada == index
-                                      ? Colors.blue
-                                      : Colors.grey,
-                                  width: 2,
+                            child: Column(
+                              children: [
+                                Checkbox(
+                                  value: foto.seleccionada,
+                                  onChanged: (v) {
+                                    setState(() {
+                                      foto.seleccionada = v ?? false;
+                                    });
+                                  },
                                 ),
-                              ),
-                              child: Image.network(
-                                fotosUrls[index],
-                                key: ValueKey(fotosUrls[index]),
-                                width: 80,
-                                height: 80,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
-                                    const Icon(Icons.broken_image),
-                              ),
+                                Container(
+                                  margin:
+                                      const EdgeInsets.symmetric(horizontal: 6),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: fotoSeleccionada == index
+                                          ? Colors.blue
+                                          : Colors.grey,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Image.network(
+                                    foto.url,
+                                    width: 80,
+                                    height: 80,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        const Icon(Icons.broken_image),
+                                  ),
+                                ),
+                              ],
                             ),
                           );
                         },
                       ),
                     ),
+
+                    if (eliminando)
+                      const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: CircularProgressIndicator(),
+                      ),
                   ],
                 ),
     );
