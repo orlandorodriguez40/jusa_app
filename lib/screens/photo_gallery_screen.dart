@@ -18,14 +18,18 @@ class PhotoGalleryScreen extends StatefulWidget {
 
 class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   // ===============================
-  // ELIMINAR FOTO
+  // ELIMINAR FOTO (USA ID O RUTA)
   // ===============================
-  Future<void> _eliminarFoto(int fotoId, int index) async {
-    final url =
-        'https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$fotoId';
+  Future<void> _eliminarFotoPorRuta(String ruta, int index) async {
+    const url = 'https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app';
 
     try {
-      final response = await http.delete(Uri.parse(url));
+      final response = await http.post(
+        Uri.parse(url),
+        body: {
+          'ruta': ruta,
+        },
+      );
 
       if (!mounted) return;
 
@@ -50,13 +54,10 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     }
   }
 
-  // ===============================
-  // CONFIRMACIÓN DE BORRADO
-  // ===============================
-  void _confirmarEliminar(int fotoId, int index) {
+  void _confirmarEliminar(String ruta, int index) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         title: const Text('Eliminar foto'),
         content: const Text('¿Deseas eliminar esta foto?'),
         actions: [
@@ -67,7 +68,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _eliminarFoto(fotoId, index);
+              _eliminarFotoPorRuta(ruta, index);
             },
             child: const Text(
               'Eliminar',
@@ -79,9 +80,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     );
   }
 
-  // ===============================
-  // UI
-  // ===============================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -95,10 +93,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         ),
         itemCount: widget.fotosServidor.length,
         itemBuilder: (context, index) {
-          final foto = widget.fotosServidor[index];
-
-          final int? fotoId = foto["id"];
-          final String ruta = foto["foto"] ?? "";
+          final String ruta = widget.fotosServidor[index]["foto"] ?? "";
 
           if (ruta.isEmpty) {
             return const Center(child: Icon(Icons.broken_image));
@@ -108,47 +103,33 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
 
           return Stack(
             children: [
-              // ===============================
-              // IMAGEN
-              // ===============================
               Positioned.fill(
                 child: Image.network(
                   imageUrl,
                   fit: BoxFit.cover,
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
-                    return const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    );
-                  },
-                  errorBuilder: (_, __, ___) =>
-                      const Icon(Icons.broken_image, size: 40),
                 ),
               ),
 
-              // ===============================
-              // BOTÓN ELIMINAR
-              // ===============================
-              if (fotoId != null)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: () => _confirmarEliminar(fotoId, index),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                        color: Color.fromARGB(220, 244, 67, 54),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.delete,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+              // ✅ BOTÓN SIEMPRE VISIBLE
+              Positioned(
+                top: 8,
+                right: 8,
+                child: InkWell(
+                  onTap: () => _confirmarEliminar(ruta, index),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.delete,
+                      color: Colors.white,
+                      size: 20,
                     ),
                   ),
                 ),
+              ),
             ],
           );
         },
