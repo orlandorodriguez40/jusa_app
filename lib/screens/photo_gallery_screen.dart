@@ -14,68 +14,55 @@ class PhotoGalleryScreen extends StatefulWidget {
 }
 
 class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
-  // ===================================
-  // ELIMINAR FOTO A TRAVÉS DE LA API
-  // ===================================
-  Future<void> _eliminarFoto(int fotoId, int index) async {
-    final String url =
-        "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$fotoId";
+  late List<dynamic> fotos;
 
-    try {
-      final response = await http.delete(Uri.parse(url));
+  @override
+  void initState() {
+    super.initState();
+    fotos = List.from(widget.fotosServidor);
+  }
 
-      if (!mounted) return;
+  Future<void> eliminarFoto(int id, int index) async {
+    final url = Uri.parse(
+        "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$id");
 
-      if (response.statusCode == 200) {
-        setState(() {
-          widget.fotosServidor.removeAt(index);
-        });
+    final response = await http.delete(url);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Foto eliminada correctamente"),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("No se pudo eliminar la foto"),
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
+    // 👇 Verificamos que el widget siga montado antes de usar context
+    if (!mounted) return;
+
+    if (response.statusCode == 200) {
+      setState(() {
+        fotos.removeAt(index);
+      });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Error de conexión"),
-        ),
+        const SnackBar(content: Text("Foto eliminada correctamente")),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Error al eliminar la foto")),
       );
     }
   }
 
-  // ===================================
-  // CONFIRMACIÓN ANTES DE BORRAR
-  // ===================================
-  void _confirmarEliminar(int fotoId, int index) {
+  void confirmarEliminacion(int id, int index) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Eliminar foto'),
-        content: const Text('¿Seguro que deseas eliminar esta foto?'),
+        title: const Text("Confirmar eliminación"),
+        content: const Text("¿Seguro que quieres eliminar esta foto?"),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+            child: const Text("Cancelar"),
+            onPressed: () => Navigator.of(context).pop(),
           ),
-          TextButton(
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("Eliminar"),
             onPressed: () {
-              Navigator.pop(context);
-              _eliminarFoto(fotoId, index);
+              Navigator.of(context).pop(); // cerrar diálogo
+              eliminarFoto(id, index); // ejecutar eliminación
             },
-            child: const Text(
-              'Eliminar',
-              style: TextStyle(color: Colors.red),
-            ),
           ),
         ],
       ),
@@ -93,73 +80,48 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           crossAxisSpacing: 10,
           mainAxisSpacing: 10,
         ),
-        itemCount: widget.fotosServidor.length,
+        itemCount: fotos.length,
         itemBuilder: (context, index) {
-          final foto = widget.fotosServidor[index];
-
-          final int? fotoId = foto["id"];
-          final String ruta = foto["foto"] ?? "";
-
-          if (ruta.isEmpty) {
-            return const Center(child: Text("Imagen inválida"));
-          }
-
+          final String ruta = fotos[index]["foto"] ?? "";
+          final int id = fotos[index]["id"] ?? 0;
           final String imageUrl = "${PhotoGalleryScreen.baseImageUrl}$ruta";
 
           return Stack(
             children: [
-              // 🖼 IMAGEN
               Positioned.fill(
                 child: Image.network(
                   imageUrl,
+                  key: ValueKey(imageUrl),
                   fit: BoxFit.cover,
                   loadingBuilder: (context, child, progress) {
                     if (progress == null) return child;
                     return const Center(child: CircularProgressIndicator());
                   },
-                  errorBuilder: (_, __, ___) =>
-                      const Icon(Icons.broken_image, size: 40),
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.broken_image,
+                    size: 40,
+                  ),
                 ),
               ),
-
-              // 🆔 ID + 🗑 BOTÓN ELIMINAR
               Positioned(
-                top: 6,
-                right: 6,
+                left: 8,
+                bottom: 8,
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color.fromARGB(200, 0, 0, 0),
-                    borderRadius: BorderRadius.circular(8),
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  color: Colors.black54,
+                  child: Text(
+                    "ID: $id",
+                    style: const TextStyle(color: Colors.white),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // ID
-                      Text(
-                        'ID: ${fotoId ?? "-"}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-
-                      const SizedBox(width: 8),
-
-                      // DELETE ICON
-                      if (fotoId != null)
-                        GestureDetector(
-                          onTap: () => _confirmarEliminar(fotoId, index),
-                          child: const Icon(
-                            Icons.delete,
-                            color: Colors.redAccent,
-                            size: 20,
-                          ),
-                        ),
-                    ],
-                  ),
+                ),
+              ),
+              Positioned(
+                right: 8,
+                top: 8,
+                child: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () => confirmarEliminacion(id, index),
                 ),
               ),
             ],
