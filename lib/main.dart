@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
+import 'screens/menu_screen.dart'; // 👈 Importamos el nuevo menú
 
 void main() {
   runApp(const MyApp());
@@ -31,7 +32,12 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
+      // Pantalla inicial sigue siendo el login
       home: const LoginScreen(),
+      // Definimos rutas para navegar fácilmente
+      routes: {
+        '/menu': (context) => const MenuScreen(), // 👈 Ruta al menú inferior
+      },
     );
   }
 }
