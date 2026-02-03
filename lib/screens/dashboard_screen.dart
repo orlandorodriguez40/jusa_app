@@ -9,11 +9,13 @@ import 'photo_gallery_screen.dart';
 class DashboardScreen extends StatefulWidget {
   final int userId;
   final String userName;
+  final List<dynamic> fotosServidor; // ✅ nuevo parámetro
 
   const DashboardScreen({
     super.key,
     required this.userId,
     required this.userName,
+    required this.fotosServidor,
   });
 
   @override
@@ -32,7 +34,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _fetchAsignaciones();
   }
 
-  // ----------------------- Fetch asignaciones -----------------------
   Future<void> _fetchAsignaciones() async {
     try {
       final response = await http.get(
@@ -50,21 +51,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _loading = false;
         });
       } else {
-        setState(() {
-          _loading = false;
-        });
+        setState(() => _loading = false);
         _showSnackBar("Error al cargar asignaciones");
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _loading = false;
-      });
+      setState(() => _loading = false);
       _showSnackBar("Error: $e");
     }
   }
 
-  // ----------------------- Tomar foto (CORREGIDA) -----------------------
   Future<void> _takePhoto(dynamic asignacion) async {
     final ImagePicker picker = ImagePicker();
     final XFile? photo = await picker.pickImage(source: ImageSource.camera);
@@ -95,13 +91,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         if (response.statusCode == 200) {
           _showSnackBar("✅ Foto enviada correctamente");
-
-          // 🔥 SOLUCIÓN: Recargar lista inmediatamente después del upload
           setState(() => _loading = true);
-          await _fetchAsignaciones(); // ← RECARGA LA LISTA
+          await _fetchAsignaciones();
           setState(() => _loading = false);
         } else {
-          // ✅ CORREGIDO: Usar la variable respStr
           final respStr = await response.stream.bytesToString();
           _showSnackBar(
               "❌ Error al enviar la foto: ${response.statusCode} - $respStr");
@@ -110,14 +103,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (!mounted) return;
         _showSnackBar("❌ Excepción al enviar la foto: $e");
       } finally {
-        if (mounted) {
-          setState(() => _sendingPhoto = false);
-        }
+        if (mounted) setState(() => _sendingPhoto = false);
       }
     }
   }
 
-  // ----------------------- Ver fotos -----------------------
   Future<void> _viewPhotos(dynamic asignacion) async {
     final int asignacionId = asignacion["id"];
 
@@ -139,7 +129,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           return;
         }
 
-        if (!mounted) return;
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => PhotoGalleryScreen(fotosServidor: fotosServidor),
@@ -154,15 +143,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // ----------------------- SnackBar helper -----------------------
   void _showSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
-  // ----------------------- Lista de asignaciones -----------------------
   Widget _buildList() {
     if (_loading) return const Center(child: CircularProgressIndicator());
 
@@ -202,7 +188,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ? const SizedBox(
                               width: 24,
                               height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2))
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                           : const Icon(Icons.camera_alt, color: Colors.green),
                       tooltip: "Tomar",
                       onPressed:
@@ -223,7 +210,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ----------------------- Build UI -----------------------
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -235,46 +221,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               "PANEL - ${widget.userName}",
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
-            actions: [
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.menu, color: Colors.white),
-                onSelected: (value) {
-                  if (value == "Salir") Navigator.of(context).pop();
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: "Asignaciones",
-                    child: Row(
-                      children: [
-                        Icon(Icons.assignment),
-                        SizedBox(width: 8),
-                        Text("Asignaciones")
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: "Perfil",
-                    child: Row(
-                      children: [
-                        Icon(Icons.person),
-                        SizedBox(width: 8),
-                        Text("Perfil")
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: "Salir",
-                    child: Row(
-                      children: [
-                        Icon(Icons.exit_to_app),
-                        SizedBox(width: 8),
-                        Text("Salir")
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
           ),
           body: Padding(
             padding: const EdgeInsets.all(16.0),

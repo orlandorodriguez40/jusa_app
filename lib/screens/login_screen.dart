@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../screens/dashboard_screen.dart';
 import 'package:logger/logger.dart';
+import '../screens/menu_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -44,42 +44,37 @@ class _LoginScreenState extends State<LoginScreen> {
         final data = json.decode(response.body);
         final bool estatus = data["estatus"] ?? false;
         final String mensaje = data["mensaje"] ?? "";
-        final Map<String, dynamic> user = data["user"] ?? {};
+        final Map<String, dynamic> user =
+            Map<String, dynamic>.from(data["user"] ?? {});
 
         if (estatus &&
             mensaje.toLowerCase().contains("exito") &&
             user.isNotEmpty) {
-          final int userId = user["id"] ?? 0;
-          final String userName = user["username"] ?? "Usuario";
-
-          if (!mounted) return;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) =>
-                  DashboardScreen(userId: userId, userName: userName),
+              builder: (context) => MenuScreen(
+                user: user, // ✅ pasamos el objeto completo
+                fotosServidor: user["fotos"] ?? [],
+              ),
             ),
           );
         } else {
-          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(mensaje.isNotEmpty ? mensaje : "Login fallido"),
-            ),
+                content: Text(mensaje.isNotEmpty ? mensaje : "Login fallido")),
           );
         }
       } else {
-        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Error de conexión (${response.statusCode})")),
         );
       }
     } catch (e) {
-      if (!mounted) return;
       logger.e(e);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

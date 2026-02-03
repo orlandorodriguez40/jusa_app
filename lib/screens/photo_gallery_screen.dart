@@ -28,7 +28,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
 
     final response = await http.delete(url);
 
-    // 👇 Verificamos que el widget siga montado antes de usar context
     if (!mounted) return;
 
     if (response.statusCode == 200) {
@@ -60,8 +59,8 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text("Eliminar"),
             onPressed: () {
-              Navigator.of(context).pop(); // cerrar diálogo
-              eliminarFoto(id, index); // ejecutar eliminación
+              Navigator.of(context).pop();
+              eliminarFoto(id, index);
             },
           ),
         ],
@@ -100,19 +99,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   errorBuilder: (_, __, ___) => const Icon(
                     Icons.broken_image,
                     size: 40,
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 8,
-                bottom: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  color: Colors.black54,
-                  child: Text(
-                    "ID: $id",
-                    style: const TextStyle(color: Colors.white),
                   ),
                 ),
               ),
