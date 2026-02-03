@@ -17,22 +17,31 @@ jobs:
       actions: write
 
     env:
-      FLUTTER_VERSION: '3.38.8'
+      FLUTTER_VERSION: '3.22.0' # 👈 usa la versión estable que tengas instalada localmente
 
     steps:
+      # ===============================
+      # 📥 Checkout del repositorio
+      # ===============================
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ===============================
+      # ⚙️ Configurar Flutter
+      # ===============================
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
 
+      # ===============================
+      # 📦 Instalar dependencias
+      # ===============================
       - name: Install dependencies
         run: flutter pub get
 
       # ===============================
-      # 🔐 Decode keystore from secrets
+      # 🔐 Decode keystore desde secrets
       # ===============================
       - name: Decode keystore
         run: |
@@ -58,7 +67,7 @@ jobs:
         run: flutter build appbundle --release
 
       # ===============================
-      # 📦 Upload Artifacts
+      # 📤 Upload Artifacts
       # ===============================
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -73,7 +82,7 @@ jobs:
           path: build/app/outputs/bundle/release/app-release.aab
 
       # ===============================
-      # 🚀 Create GitHub Release (ONLY TAGS)
+      # 🚀 Crear GitHub Release (SOLO TAGS)
       # ===============================
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
