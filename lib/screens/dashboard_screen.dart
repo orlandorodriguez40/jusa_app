@@ -39,7 +39,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final response = await http.get(
         Uri.parse(
             "https://sistema.jusaimpulsemkt.com/api/mis-asignaciones-app/${widget.userId}"),
-        headers: {"Accept": "application/json"},
+        headers: const {"Accept": "application/json"},
       );
 
       if (!mounted) return;
@@ -115,7 +115,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final response = await http.get(
         Uri.parse(
             "https://sistema.jusaimpulsemkt.com/api/fotos-asignacion-app/$asignacionId"),
-        headers: {"Accept": "application/json"},
+        headers: const {"Accept": "application/json"},
       );
 
       if (!mounted) return;
@@ -245,8 +245,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       CircularProgressIndicator(),
                       SizedBox(height: 12),
-                      Text("Enviando foto...",
-                          style: TextStyle(color: Colors.white, fontSize: 16)),
+                      Text(
+                        "Enviando foto...",
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
                     ],
                   ),
                 ),
