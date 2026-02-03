@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../screens/dashboard_screen.dart';
 import 'package:logger/logger.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -49,16 +48,8 @@ class _LoginScreenState extends State<LoginScreen> {
         if (estatus &&
             mensaje.toLowerCase().contains("exito") &&
             user.isNotEmpty) {
-          final int userId = user["id"] ?? 0;
-          final String userName = user["username"] ?? "Usuario";
-
-          if (!mounted) return;
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) =>
-                  DashboardScreen(userId: userId, userName: userName),
-            ),
-          );
+          // ✅ En lugar de DashboardScreen, vamos al menú inferior
+          Navigator.pushReplacementNamed(context, '/menu');
         } else {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(

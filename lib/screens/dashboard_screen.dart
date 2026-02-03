@@ -32,13 +32,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _fetchAsignaciones();
   }
 
-  // ----------------------- Fetch asignaciones -----------------------
   Future<void> _fetchAsignaciones() async {
     try {
       final response = await http.get(
         Uri.parse(
             "https://sistema.jusaimpulsemkt.com/api/mis-asignaciones-app/${widget.userId}"),
-        headers: {"Accept": "application/json"},
+        headers: const {"Accept": "application/json"},
       );
 
       if (!mounted) return;
@@ -64,7 +63,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // ----------------------- Tomar foto (CORREGIDA) -----------------------
   Future<void> _takePhoto(dynamic asignacion) async {
     final ImagePicker picker = ImagePicker();
     final XFile? photo = await picker.pickImage(source: ImageSource.camera);
@@ -95,13 +93,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         if (response.statusCode == 200) {
           _showSnackBar("✅ Foto enviada correctamente");
-
-          // 🔥 SOLUCIÓN: Recargar lista inmediatamente después del upload
           setState(() => _loading = true);
-          await _fetchAsignaciones(); // ← RECARGA LA LISTA
+          await _fetchAsignaciones();
           setState(() => _loading = false);
         } else {
-          // ✅ CORREGIDO: Usar la variable respStr
           final respStr = await response.stream.bytesToString();
           _showSnackBar(
               "❌ Error al enviar la foto: ${response.statusCode} - $respStr");
@@ -117,7 +112,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // ----------------------- Ver fotos -----------------------
   Future<void> _viewPhotos(dynamic asignacion) async {
     final int asignacionId = asignacion["id"];
 
@@ -125,7 +119,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final response = await http.get(
         Uri.parse(
             "https://sistema.jusaimpulsemkt.com/api/fotos-asignacion-app/$asignacionId"),
-        headers: {"Accept": "application/json"},
+        headers: const {"Accept": "application/json"},
       );
 
       if (!mounted) return;
@@ -154,7 +148,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // ----------------------- SnackBar helper -----------------------
   void _showSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -162,7 +155,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ----------------------- Lista de asignaciones -----------------------
   Widget _buildList() {
     if (_loading) return const Center(child: CircularProgressIndicator());
 
@@ -202,7 +194,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ? const SizedBox(
                               width: 24,
                               height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2))
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                           : const Icon(Icons.camera_alt, color: Colors.green),
                       tooltip: "Tomar",
                       onPressed:
@@ -223,7 +216,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ----------------------- Build UI -----------------------
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -248,7 +240,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       children: [
                         Icon(Icons.assignment),
                         SizedBox(width: 8),
-                        Text("Asignaciones")
+                        Text("Asignaciones"),
                       ],
                     ),
                   ),
@@ -258,7 +250,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       children: [
                         Icon(Icons.person),
                         SizedBox(width: 8),
-                        Text("Perfil")
+                        Text("Perfil"),
                       ],
                     ),
                   ),
@@ -268,7 +260,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       children: [
                         Icon(Icons.exit_to_app),
                         SizedBox(width: 8),
-                        Text("Salir")
+                        Text("Salir"),
                       ],
                     ),
                   ),
@@ -299,8 +291,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       CircularProgressIndicator(),
                       SizedBox(height: 12),
-                      Text("Enviando foto...",
-                          style: TextStyle(color: Colors.white, fontSize: 16)),
+                      Text(
+                        "Enviando foto...",
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
                     ],
                   ),
                 ),
