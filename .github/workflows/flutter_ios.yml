@@ -1,0 +1,60 @@
+name: Flutter iOS Build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest  # 👈 usamos macOS runner
+
+    permissions:
+      contents: write
+      actions: write
+
+    env:
+      FLUTTER_VERSION: '3.22.0' # 👈 ajusta a tu versión local
+
+    steps:
+      # ===============================
+      # 📥 Checkout del repositorio
+      # ===============================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ===============================
+      # ⚙️ Configurar Flutter
+      # ===============================
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      # ===============================
+      # 📦 Instalar dependencias
+      # ===============================
+      - name: Install dependencies
+        run: flutter pub get
+
+      # ===============================
+      # 🧹 Clean & Build iOS
+      # ===============================
+      - name: Flutter clean
+        run: flutter clean
+
+      - name: Build iOS
+        run: flutter build ios --no-codesign
+        # 👆 genera el proyecto listo para Xcode, sin firmar
+
+      # ===============================
+      # 📤 Upload Artifacts
+      # ===============================
+      - name: Upload iOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: build/ios/iphoneos/
