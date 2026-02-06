@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
+import 'package:geolocator/geolocator.dart';
 
 class PhotoService {
   final Logger logger = Logger();
@@ -27,20 +28,30 @@ class PhotoService {
     }
   }
 
-  /// Subir foto de una asignación
+  /// Subir foto de una asignación con lat/long
   Future<void> uploadPhoto(File photoFile, int asignacionId) async {
     try {
+      // Obtener ubicación actual
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
       final request = http.MultipartRequest(
         'POST',
         Uri.parse("https://sistema.jusaimpulsemkt.com/api/tomar-foto-app"),
       );
 
+      // Campos adicionales
       request.fields['asignacion_id'] = asignacionId.toString();
+      request.fields['latitud'] = position.latitude.toString();
+      request.fields['longitud'] = position.longitude.toString();
+
+      // Foto
       request.files
           .add(await http.MultipartFile.fromPath('file', photoFile.path));
 
-      logger
-          .i("Enviando foto: ${photoFile.path} para asignacion $asignacionId");
+      logger.i(
+          "Enviando foto: ${photoFile.path} para asignacion $asignacionId con ubicación ${position.latitude}, ${position.longitude}");
 
       final response = await request.send();
 

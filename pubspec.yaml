@@ -5,12 +5,12 @@ version: 1.0.0+1
 
 environment:
   sdk: ">=2.19.0 <3.0.0"
-  flutter: ">=3.0.0"
+  flutter: ">=3.22.0"
 
 dependencies:
   flutter:
-    sdk: flutter
-
+    sdk: flutter  
+  geolocator: ^11.0.0
   # Íconos y diseño
   cupertino_icons: ^1.0.5
 
