@@ -38,4 +38,4 @@ class Asignacion {
       'estatus': estatus,
     };
   }
-}
+} //fin//
