@@ -19,20 +19,20 @@ class MenuScreen extends StatefulWidget {
 
 class _MenuScreenState extends State<MenuScreen> {
   int _selectedIndex = 0;
-  late final List<Widget> _screens;
+  late Map<String, dynamic> usuario;
 
   @override
   void initState() {
     super.initState();
-    _screens = [
-      DashboardScreen(
-        userId: widget.user["id"],
-        userName: widget.user["username"],
-        fotosServidor: widget.fotosServidor,
-      ),
-      PerfilScreen(usuario: widget.user), // ✅ pasamos el objeto completo
-      const SizedBox(), // salir
-    ];
+    usuario = Map<String, dynamic>.from(widget.user);
+  }
+
+  // 🛠️ Función auxiliar para extraer el nombre real sin importar la llave
+  String _obtenerNombreValido() {
+    return usuario["name"] ?? // Opción 1 (estándar)
+        usuario["nombre"] ?? // Opción 2 (español)
+        usuario["username"] ?? // Opción 3 (fallback)
+        "Usuario"; // Opción final
   }
 
   void _onItemTapped(int index) {
@@ -49,29 +49,38 @@ class _MenuScreenState extends State<MenuScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final String nombreParaMostrar = _obtenerNombreValido();
+
     return Scaffold(
       body: IndexedStack(
         index: _selectedIndex,
-        children: _screens,
+        children: [
+          DashboardScreen(
+            userId: usuario["id"] ?? 0,
+            userName: nombreParaMostrar, // ✅ Ahora siempre tendrá un valor
+            fotosServidor: widget.fotosServidor,
+          ),
+          PerfilScreen(
+            usuario: usuario,
+            onPerfilActualizado: (actualizado) {
+              setState(() {
+                usuario = actualizado;
+              });
+            },
+          ),
+          const SizedBox(),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         selectedItemColor: Colors.green,
-        unselectedItemColor: Colors.grey,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.assignment),
-            label: "Asignaciones",
-          ),
+              icon: Icon(Icons.assignment), label: "Asignaciones"),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Perfil"),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: "Perfil",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.exit_to_app),
-            label: "Salir",
-          ),
+              icon: Icon(Icons.exit_to_app), label: "Salir"),
         ],
       ),
     );

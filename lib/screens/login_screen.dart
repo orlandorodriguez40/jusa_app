@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:logger/logger.dart';
-import '../screens/menu_screen.dart';
+import 'menu_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,28 +11,25 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final Logger logger = Logger();
   bool _isLoading = false;
 
   Future<void> _login() async {
-    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Por favor ingresa usuario y contraseña")),
-      );
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
       final response = await http.post(
         Uri.parse("https://sistema.jusaimpulsemkt.com/api/login-app"),
-        headers: {"Content-Type": "application/json"},
-        body: json.encode({
-          "username": _usernameController.text,
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: jsonEncode({
+          "username": _usernameController.text.trim(),
           "password": _passwordController.text,
         }),
       );
@@ -41,39 +37,34 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final bool estatus = data["estatus"] ?? false;
-        final String mensaje = data["mensaje"] ?? "";
-        final Map<String, dynamic> user =
-            Map<String, dynamic>.from(data["user"] ?? {});
+        final data = jsonDecode(response.body);
+        final user = data['user'];
+        final fotos = data['fotos_servidor'] ?? [];
 
-        if (estatus &&
-            mensaje.toLowerCase().contains("exito") &&
-            user.isNotEmpty) {
-          Navigator.of(context).pushReplacement(
+        if (user != null) {
+          // El parche ha sido removido. Ahora usamos el objeto 'user'
+          // tal cual llega del backend, ya con el join realizado.
+          Navigator.pushReplacement(
+            context,
             MaterialPageRoute(
-              builder: (context) => MenuScreen(
-                user: user, // ✅ pasamos el objeto completo
-                fotosServidor: user["fotos"] ?? [],
+              builder: (_) => MenuScreen(
+                user: Map<String, dynamic>.from(user),
+                fotosServidor: List<dynamic>.from(fotos),
               ),
             ),
           );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text(mensaje.isNotEmpty ? mensaje : "Login fallido")),
-          );
         }
       } else {
+        final errorData = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error de conexión (${response.statusCode})")),
+          SnackBar(
+              content: Text(errorData['message'] ?? "Error de credenciales")),
         );
       }
     } catch (e) {
-      logger.e(e);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
+        SnackBar(content: Text("Error de conexión: $e")),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -90,42 +81,61 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Acceso al Sistema")),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset("assets/images/logo-jusa-2-opt.png", height: 120),
-            const SizedBox(height: 30),
-            TextField(
-              controller: _usernameController,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.person, color: Color(0xFF424949)),
-                labelText: "USERNAME",
-              ),
+      backgroundColor: Colors.white,
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'assets/images/logo-jusa-2-opt.png',
+                  height: 120,
+                  errorBuilder: (_, __, ___) =>
+                      const Icon(Icons.business, size: 80, color: Colors.green),
+                ),
+                const SizedBox(height: 40),
+                TextFormField(
+                  controller: _usernameController,
+                  decoration: const InputDecoration(
+                    labelText: "Usuario",
+                    prefixIcon: Icon(Icons.person),
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (v) => v!.isEmpty ? "Ingrese su usuario" : null,
+                ),
+                const SizedBox(height: 20),
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: "Contraseña",
+                    prefixIcon: Icon(Icons.lock),
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (v) => v!.isEmpty ? "Ingrese su contraseña" : null,
+                ),
+                const SizedBox(height: 30),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _login,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF62B23F),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text("INICIAR SESIÓN",
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.lock, color: Color(0xFF424949)),
-                labelText: "PASSWORD",
-              ),
-              obscureText: true,
-            ),
-            const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _login,
-                child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("ACCEDER"),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
