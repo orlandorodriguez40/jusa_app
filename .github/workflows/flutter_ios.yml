@@ -1,69 +1,69 @@
-name: Flutter Android Build
+name: Jusa App - Build All Platforms
 
 on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 jobs:
+  # --- TRABAJO DE ANDROID ---
   build-android:
     runs-on: ubuntu-latest
-
     steps:
-      # ===============================
-      # 📥 Checkout del repositorio
-      # ===============================
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # ===============================
-      # ☕ Configurar Java 17 (Crucial para Flutter 3.38+)
-      # ===============================
-      - name: Setup Java
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # ===============================
-      # ⚙️ Configurar Flutter (3.38.8)
-      # ===============================
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.38.8'
-          channel: 'stable'
 
-      # ===============================
-      # 📦 Instalar dependencias
-      # ===============================
       - name: Install dependencies
         run: flutter pub get
 
-      # ===============================
-      # 🔑 Permisos para Gradle
-      # ===============================
-      - name: Give execute permission to gradlew
-        run: chmod +x android/gradlew
-
-      # ===============================
-      # 🛠️ Build APK y AAB (Modo Debug)
-      # ===============================
-      - name: Build Android App (APK & Bundle)
+      - name: Build APK & AAB
         run: |
+          chmod +x android/gradlew
           flutter build apk --debug
           flutter build appbundle --debug
 
-      # ===============================
-      # 📤 Subir ambos archivos juntos
-      # ===============================
-      - name: Upload Android Artifacts
+      - name: Upload Android Files
         uses: actions/upload-artifact@v4
         with:
-          name: android-build-package
+          name: android-build
           path: |
             build/app/outputs/flutter-apk/app-debug.apk
             build/app/outputs/bundle/debug/app-debug.aab
+
+  # --- TRABAJO DE IOS ---
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.8'
+
+      - name: Install dependencies
+        run: |
+          flutter pub get
+          cd ios
+          pod install || pod repo update && pod install
+          cd ..
+
+      - name: Build iOS
+        run: flutter build ios --release --no-codesign
+
+      - name: Upload iOS Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: build/ios/iphoneos/Runner.app
