@@ -1,4 +1,4 @@
-name: Flutter iOS Build
+name: Flutter Android Build
 
 on:
   push:
@@ -9,15 +9,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-ios:
-    runs-on: macos-latest  # 👈 usamos macOS runner
-
-    permissions:
-      contents: write
-      actions: write
-
-    env:
-      FLUTTER_VERSION: '3.22.0' # 👈 ajusta a tu versión local
+  build-android:
+    runs-on: ubuntu-latest # Android compila más rápido en Linux
 
     steps:
       # ===============================
@@ -27,12 +20,22 @@ jobs:
         uses: actions/checkout@v4
 
       # ===============================
-      # ⚙️ Configurar Flutter
+      # ☕ Configurar Java 17 (Crucial)
+      # ===============================
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # ===============================
+      # ⚙️ Configurar Flutter (3.38.8)
       # ===============================
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: '3.38.8'
+          channel: 'stable'
 
       # ===============================
       # 📦 Instalar dependencias
@@ -41,20 +44,23 @@ jobs:
         run: flutter pub get
 
       # ===============================
-      # 🧹 Clean & Build iOS
+      # 🔑 Permisos para Gradle
       # ===============================
-      - name: Flutter clean
-        run: flutter clean
-
-      - name: Build iOS
-        run: flutter build ios --no-codesign
-        # 👆 genera el proyecto listo para Xcode, sin firmar
+      - name: Give execute permission to gradlew
+        run: chmod +x android/gradlew
 
       # ===============================
-      # 📤 Upload Artifacts
+      # 🛠️ Build APK (Modo Debug para evitar errores de firma)
       # ===============================
-      - name: Upload iOS build
+      - name: Build Android APK
+        # Usamos debug por ahora para asegurar que el build pase sin pedir Keystore
+        run: flutter build apk --debug
+
+      # ===============================
+      # 📤 Subir el APK generado
+      # ===============================
+      - name: Upload Android Build
         uses: actions/upload-artifact@v4
         with:
-          name: ios-build
-          path: build/ios/iphoneos/
+          name: android-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
