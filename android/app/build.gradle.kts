@@ -1,3 +1,7 @@
+// 1. DEFINICIÓN DE VERSIONES (Añade esto al principio)
+def flutterVersionCode = project.findProperty('flutter.versionCode') ?: '1'
+def flutterVersionName = project.findProperty('flutter.versionName') ?: '1.0'
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -11,29 +15,28 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        // Actualizado a Java 17 para coincidir con tu Flutter 3.38
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.login_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion      
         
+        // Ahora estas variables sí están definidas arriba
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
