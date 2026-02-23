@@ -1,11 +1,18 @@
-// 1. DEFINICIÓN DE VERSIONES (Añade esto al principio)
-def flutterVersionCode = project.findProperty('flutter.versionCode') ?: '1'
-def flutterVersionName = project.findProperty('flutter.versionName') ?: '1.0'
+import java.util.Properties
+
+// 1. Configuración para leer versiones (Sintaxis Kotlin DSL)
+val localProperties = Properties()
+val localPropertiesFile = rootProject.projectDir.resolve("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
+val flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "1"
+val flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0"
 
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -15,29 +22,27 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        // Actualizado a Java 17 para coincidir con tu Flutter 3.38
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
         applicationId = "com.example.login_app"
-        
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion      
+        targetSdk = flutter.targetSdkVersion
         
-        // Ahora estas variables sí están definidas arriba
-        versionCode = flutterVersionCode.toInteger()
+        // Uso de las variables declaradas arriba
+        versionCode = flutterVersionCode.toInt()
         versionName = flutterVersionName
     }
 
     buildTypes {
-        release {
-            // Signing with the debug keys for now, so `flutter run --release` works.
+        getByName("release") {
+            // Usamos la configuración de debug para que el build no pida llaves reales
             signingConfig = signingConfigs.getByName("debug")
         }
     }
