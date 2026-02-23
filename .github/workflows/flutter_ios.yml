@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-android:
-    runs-on: ubuntu-latest # Android compila más rápido en Linux
+    runs-on: ubuntu-latest
 
     steps:
       # ===============================
@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       # ===============================
-      # ☕ Configurar Java 17 (Crucial)
+      # ☕ Configurar Java 17 (Crucial para Flutter 3.38+)
       # ===============================
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -50,17 +50,20 @@ jobs:
         run: chmod +x android/gradlew
 
       # ===============================
-      # 🛠️ Build APK (Modo Debug para evitar errores de firma)
+      # 🛠️ Build APK y AAB (Modo Debug)
       # ===============================
-      - name: Build Android APK
-        # Usamos debug por ahora para asegurar que el build pase sin pedir Keystore
-        run: flutter build apk --debug
+      - name: Build Android App (APK & Bundle)
+        run: |
+          flutter build apk --debug
+          flutter build appbundle --debug
 
       # ===============================
-      # 📤 Subir el APK generado
+      # 📤 Subir ambos archivos juntos
       # ===============================
-      - name: Upload Android Build
+      - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: android-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: android-build-package
+          path: |
+            build/app/outputs/flutter-apk/app-debug.apk
+            build/app/outputs/bundle/debug/app-debug.aab
