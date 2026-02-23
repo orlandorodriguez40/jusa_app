@@ -1,3 +1,5 @@
+// login_screen.dart - VERSIÓN PARA DETECTAR EL JSON REAL
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -17,9 +19,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       final response = await http.post(
@@ -34,41 +40,88 @@ class _LoginScreenState extends State<LoginScreen> {
         }),
       );
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
+
+      final String bodyRaw = response.body;
+      debugPrint("JSON RECIBIDO: $bodyRaw");
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final user = data['user'];
-        final fotos = data['fotos_servidor'] ?? [];
+        final dynamic data = jsonDecode(bodyRaw);
+        Map<String, dynamic>? userDetected;
 
-        if (user != null) {
-          // El parche ha sido removido. Ahora usamos el objeto 'user'
-          // tal cual llega del backend, ya con el join realizado.
+        // Intentamos detectar al usuario automáticamente
+        if (data is Map<String, dynamic>) {
+          // Buscamos en las llaves más probables
+          var candidate = data['user'] ?? data['usuario'] ?? data['data'];
+
+          if (candidate is List && candidate.isNotEmpty) {
+            candidate = candidate[0];
+          }
+
+          if (candidate is Map) {
+            userDetected = Map<String, dynamic>.from(candidate);
+          } else if (data.containsKey('username')) {
+            // Si el usuario está en la raíz
+            userDetected = data;
+          }
+        }
+
+        if (userDetected != null) {
+          final fotos = data is Map ? (data['fotos_servidor'] ?? []) : [];
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (_) => MenuScreen(
-                user: Map<String, dynamic>.from(user),
+                user: userDetected!,
                 fotosServidor: List<dynamic>.from(fotos),
               ),
             ),
           );
+        } else {
+          // 🚨 SI FALLA, MOSTRAMOS EL JSON EN PANTALLA
+          _mostrarDialogoDebug(bodyRaw);
         }
       } else {
-        final errorData = jsonDecode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(errorData['message'] ?? "Error de credenciales")),
-        );
+        _mostrarError("Error ${response.statusCode}: Credenciales incorrectas");
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error de conexión: $e")),
-      );
+      if (mounted) {
+        _mostrarError("Error de conexión: $e");
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  // Esta función te mostrará el JSON en el celular para que me lo digas
+  void _mostrarDialogoDebug(String jsonStr) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Analizando Respuesta"),
+        content: SingleChildScrollView(
+          child: Text("El servidor envió esto:\n\n$jsonStr"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Entendido"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _mostrarError(String mensaje) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(mensaje)),
+    );
   }
 
   @override
@@ -104,7 +157,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: Icon(Icons.person),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (v) => v!.isEmpty ? "Ingrese su usuario" : null,
+                  validator: (v) {
+                    return v!.isEmpty ? "Ingrese su usuario" : null;
+                  },
                 ),
                 const SizedBox(height: 20),
                 TextFormField(
@@ -115,7 +170,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: Icon(Icons.lock),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (v) => v!.isEmpty ? "Ingrese su contraseña" : null,
+                  validator: (v) {
+                    return v!.isEmpty ? "Ingrese su contraseña" : null;
+                  },
                 ),
                 const SizedBox(height: 30),
                 SizedBox(

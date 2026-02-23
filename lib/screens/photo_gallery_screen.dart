@@ -22,13 +22,31 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     fotos = List.from(widget.fotosServidor);
   }
 
+  bool _puedeEliminar(dynamic foto) {
+    if (foto["created_at"] == null) {
+      return false;
+    }
+
+    try {
+      DateTime fechaFoto = DateTime.parse(foto["created_at"]).toLocal();
+      DateTime ahora = DateTime.now();
+      int diferencia = ahora.difference(fechaFoto).inMinutes;
+
+      return diferencia < 5;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<void> eliminarFoto(int id, int index) async {
     final url = Uri.parse(
         "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$id");
 
     final response = await http.delete(url);
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     if (response.statusCode == 200) {
       setState(() {
@@ -53,7 +71,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         actions: [
           TextButton(
             child: const Text("Cancelar"),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -81,9 +101,11 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         ),
         itemCount: fotos.length,
         itemBuilder: (context, index) {
-          final String ruta = fotos[index]["foto"] ?? "";
-          final int id = fotos[index]["id"] ?? 0;
+          final fotoData = fotos[index];
+          final String ruta = fotoData["foto"] ?? "";
+          final int id = fotoData["id"] ?? 0;
           final String imageUrl = "${PhotoGalleryScreen.baseImageUrl}$ruta";
+          final bool mostrarBorrar = _puedeEliminar(fotoData);
 
           return Stack(
             children: [
@@ -93,7 +115,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   key: ValueKey(imageUrl),
                   fit: BoxFit.cover,
                   loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
+                    if (progress == null) {
+                      return child;
+                    }
                     return const Center(child: CircularProgressIndicator());
                   },
                   errorBuilder: (_, __, ___) => const Icon(
@@ -102,14 +126,25 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   ),
                 ),
               ),
-              Positioned(
-                right: 8,
-                top: 8,
-                child: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => confirmarEliminacion(id, index),
+              if (mostrarBorrar) ...[
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      // ✅ CORRECCIÓN: Usando .withValues(alpha: ...) en lugar de .withOpacity
+                      color: Colors.white.withValues(alpha: 0.7),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () {
+                        confirmarEliminacion(id, index);
+                      },
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ],
           );
         },
