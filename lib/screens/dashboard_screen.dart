@@ -259,6 +259,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false, // 🛠️ SOLUCIÓN PARA LA FRANJA ROJA
       appBar: AppBar(
         backgroundColor: const Color(0xFF424949),
         centerTitle: true,
@@ -267,18 +268,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: Stack(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                GestureDetector(
-                  onTap: _abrirPerfil,
-                  child: Image.asset("assets/images/logo-jusa-2-opt.png",
-                      height: 80),
-                ),
-                const SizedBox(height: 20),
-                Expanded(child: _buildList()),
-              ],
+          SafeArea(
+            // 🛠️ PROTEGE EL DISEÑO EN BORDES
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  GestureDetector(
+                    onTap: _abrirPerfil,
+                    child: Image.asset("assets/images/logo-jusa-2-opt.png",
+                        height: 70), // Ajustado ligeramente para ganar espacio
+                  ),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: _buildList(),
+                  ),
+                ],
+              ),
             ),
           ),
           if (_sendingPhoto)
@@ -296,12 +302,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    if (_asignaciones.isEmpty) {
+      return const Center(child: Text("No hay asignaciones disponibles"));
+    }
+
     return ListView.builder(
+      physics: const BouncingScrollPhysics(), // 🛠️ MEJORA EL SCROLL
       itemCount: _asignaciones.length,
       itemBuilder: (context, index) {
         final asign = _asignaciones[index];
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 8),
+          elevation: 2,
           child: Padding(
             padding: const EdgeInsets.all(12.0),
             child: Column(
@@ -313,12 +325,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text("Plaza: ${asign["plaza"]}"),
                 Text("Ubicación: ${asign["ciudad"]}"),
                 Text("Estatus: ${asign["estatus"]}"),
+                const Divider(),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     IconButton(
                       icon: const Icon(Icons.camera_alt, color: Colors.green),
                       onPressed: () => _takePhoto(asign),
                     ),
+                    const SizedBox(width: 10),
                     IconButton(
                       icon: const Icon(Icons.photo_library, color: Colors.blue),
                       onPressed: () => _viewPhotos(asign),
@@ -333,4 +348,3 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 }
-// fin
