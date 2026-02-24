@@ -19,33 +19,29 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   @override
   void initState() {
     super.initState();
+    // Clonamos la lista y la ordenamos por ID para que la nueva salga arriba
     fotos = List.from(widget.fotosServidor);
-    // Ordenar por ID descendente
     fotos.sort((a, b) => (b['id'] ?? 0).compareTo(a['id'] ?? 0));
   }
 
+  // Lógica de tiempo mejorada
   bool _puedeEliminar(dynamic foto) {
-    final String? createdAt = foto["created_at"];
-    if (createdAt == null) return false;
+    if (foto["created_at"] == null) return false;
 
     try {
-      // Intentamos parsear la fecha.
-      // Si el server no envía 'Z' al final, asumimos que es UTC.
-      DateTime fechaFoto = DateTime.parse(createdAt).toUtc();
-      DateTime ahoraUtc = DateTime.now().toUtc();
+      // Parseo flexible: intentamos leer la fecha del servidor
+      DateTime fechaFoto = DateTime.parse(foto["created_at"]).toUtc();
+      DateTime ahora = DateTime.now().toUtc();
 
-      // Calculamos la diferencia absoluta para evitar problemas si el reloj
-      // del server está unos segundos adelantado al del celular.
-      int diferenciaSegundos = ahoraUtc.difference(fechaFoto).inSeconds;
+      int diferenciaSegundos = ahora.difference(fechaFoto).inSeconds;
 
-      debugPrint("--- LOG DE TIEMPO (ID ${foto['id']}) ---");
-      debugPrint("Diferencia calculada: $diferenciaSegundos segundos");
+      // Imprime esto en tu consola para ver el desfase real
+      debugPrint("ID: ${foto['id']} | Segundos: $diferenciaSegundos");
 
-      // Permitimos borrar si han pasado menos de 5 minutos (300 seg)
-      // Agregamos un margen de error de 60 segundos por desfase de relojes
-      return diferenciaSegundos >= -60 && diferenciaSegundos < 300;
+      // Mostramos el botón si han pasado menos de 300 segundos (5 min)
+      // Agregamos un margen de 60 segundos por si los relojes no coinciden
+      return diferenciaSegundos < 300 && diferenciaSegundos > -60;
     } catch (e) {
-      debugPrint("Error parseando fecha: $e");
       return false;
     }
   }
@@ -68,7 +64,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("No se pudo eliminar la foto")),
+          const SnackBar(content: Text("Error al eliminar la foto")),
         );
       }
     } catch (e) {
@@ -82,19 +78,18 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Eliminar foto"),
-        content: const Text(
-            "¿Deseas borrar esta imagen? Esta acción no se puede deshacer."),
+        title: const Text("Confirmar eliminación"),
+        content: const Text("¿Seguro que quieres eliminar esta foto?"),
         actions: [
           TextButton(
             child: const Text("Cancelar"),
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(context).pop(),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text("Eliminar"),
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.of(context).pop();
               eliminarFoto(id, index);
             },
           ),
@@ -107,7 +102,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Galería de Fotos"),
+        title: const Text("Fotos tomadas"),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -115,63 +110,62 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           )
         ],
       ),
-      body: fotos.isEmpty
-          ? const Center(child: Text("No hay fotos registradas"))
-          : GridView.builder(
-              padding: const EdgeInsets.all(12),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-              ),
-              itemCount: fotos.length,
-              itemBuilder: (context, index) {
-                final fotoData = fotos[index];
-                final String ruta = fotoData["foto"] ?? "";
-                final int id = fotoData["id"] ?? 0;
-                final String imageUrl =
-                    "${PhotoGalleryScreen.baseImageUrl}$ruta";
-                final bool mostrarBorrar = _puedeEliminar(fotoData);
+      body: GridView.builder(
+        padding: const EdgeInsets.all(12),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+        ),
+        itemCount: fotos.length,
+        itemBuilder: (context, index) {
+          final fotoData = fotos[index];
+          final String ruta = fotoData["foto"] ?? "";
+          final int id = fotoData["id"] ?? 0;
+          final String imageUrl = "${PhotoGalleryScreen.baseImageUrl}$ruta";
 
-                return Stack(
-                  children: [
-                    Positioned.fill(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.broken_image),
-                        ),
-                      ),
+          // Aplicamos la restricción aquí
+          final bool visible = _puedeEliminar(fotoData);
+
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: Image.network(
+                  imageUrl,
+                  key: ValueKey(imageUrl),
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return const Center(child: CircularProgressIndicator());
+                  },
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.broken_image,
+                    size: 40,
+                  ),
+                ),
+              ),
+              // Solo mostramos el Positioned si está en el rango de 5 min
+              if (visible)
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(color: Colors.black26, blurRadius: 3)
+                        ]),
+                    child: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () => confirmarEliminacion(id, index),
                     ),
-                    if (mostrarBorrar)
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: Container(
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 4,
-                                offset: Offset(0, 2),
-                              )
-                            ],
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => confirmarEliminacion(id, index),
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
