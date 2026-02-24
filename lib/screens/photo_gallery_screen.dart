@@ -19,45 +19,56 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   @override
   void initState() {
     super.initState();
+    // Copiamos la lista y la ordenamos por fecha (más reciente arriba)
     fotos = List.from(widget.fotosServidor);
+    fotos.sort(
+        (a, b) => (b['created_at'] ?? '').compareTo(a['created_at'] ?? ''));
   }
 
   bool _puedeEliminar(dynamic foto) {
-    if (foto["created_at"] == null) {
-      return false;
-    }
+    if (foto["created_at"] == null) return false;
 
     try {
-      DateTime fechaFoto = DateTime.parse(foto["created_at"]).toLocal();
-      DateTime ahora = DateTime.now();
-      int diferencia = ahora.difference(fechaFoto).inMinutes;
+      // 1. Convertimos la fecha del servidor (Laravel suele enviar UTC)
+      DateTime fechaFoto = DateTime.parse(foto["created_at"]).toUtc();
 
-      return diferencia < 5;
+      // 2. Obtenemos la hora actual en UTC para una comparación exacta
+      DateTime ahoraUtc = DateTime.now().toUtc();
+
+      // 3. Calculamos la diferencia de tiempo
+      Duration diferencia = ahoraUtc.difference(fechaFoto);
+
+      // Solo permitimos eliminar si han pasado menos de 5 minutos
+      return diferencia.inMinutes >= 0 && diferencia.inMinutes < 5;
     } catch (e) {
       return false;
     }
   }
 
   Future<void> eliminarFoto(int id, int index) async {
-    final url = Uri.parse(
-        "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$id");
+    try {
+      final url = Uri.parse(
+          "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$id");
 
-    final response = await http.delete(url);
+      final response = await http.delete(url);
 
-    if (!mounted) {
-      return;
-    }
+      if (!mounted) return;
 
-    if (response.statusCode == 200) {
-      setState(() {
-        fotos.removeAt(index);
-      });
+      if (response.statusCode == 200) {
+        setState(() {
+          fotos.removeAt(index);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Foto eliminada correctamente")),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("No se pudo eliminar la foto")),
+        );
+      }
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Foto eliminada correctamente")),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Error al eliminar la foto")),
+        const SnackBar(content: Text("Error de conexión al eliminar")),
       );
     }
   }
@@ -67,19 +78,18 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Confirmar eliminación"),
-        content: const Text("¿Seguro que quieres eliminar esta foto?"),
+        content: const Text(
+            "¿Seguro que quieres borrar esta foto? Solo tienes 5 minutos desde que la tomaste."),
         actions: [
           TextButton(
             child: const Text("Cancelar"),
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
+            onPressed: () => Navigator.pop(context),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text("Eliminar"),
             onPressed: () {
-              Navigator.of(context).pop();
+              Navigator.pop(context);
               eliminarFoto(id, index);
             },
           ),
@@ -91,65 +101,66 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Fotos tomadas")),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(12),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-        ),
-        itemCount: fotos.length,
-        itemBuilder: (context, index) {
-          final fotoData = fotos[index];
-          final String ruta = fotoData["foto"] ?? "";
-          final int id = fotoData["id"] ?? 0;
-          final String imageUrl = "${PhotoGalleryScreen.baseImageUrl}$ruta";
-          final bool mostrarBorrar = _puedeEliminar(fotoData);
-
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: Image.network(
-                  imageUrl,
-                  key: ValueKey(imageUrl),
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) {
-                      return child;
-                    }
-                    return const Center(child: CircularProgressIndicator());
-                  },
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.broken_image,
-                    size: 40,
-                  ),
-                ),
-              ),
-              if (mostrarBorrar) ...[
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      // ✅ SOLUCIÓN: Usamos .withAlpha (0-255) para evitar el deprecado y el error de compilación.
-                      // 0.7 de opacidad equivale aproximadamente a 178 de alpha (255 * 0.7)
-                      color: Colors.white.withAlpha(178),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () {
-                        confirmarEliminacion(id, index);
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          );
-        },
+      appBar: AppBar(
+        title: const Text("Fotos tomadas"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => setState(
+                () {}), // Refresca para actualizar el tiempo de los botones
+          )
+        ],
       ),
+      body: fotos.isEmpty
+          ? const Center(child: Text("No hay fotos registradas"))
+          : GridView.builder(
+              padding: const EdgeInsets.all(12),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+              ),
+              itemCount: fotos.length,
+              itemBuilder: (context, index) {
+                final fotoData = fotos[index];
+                final String ruta = fotoData["foto"] ?? "";
+                final int id = fotoData["id"] ?? 0;
+                final String imageUrl =
+                    "${PhotoGalleryScreen.baseImageUrl}$ruta";
+                final bool mostrarBorrar = _puedeEliminar(fotoData);
+
+                return Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.broken_image),
+                        ),
+                      ),
+                    ),
+                    if (mostrarBorrar)
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(180),
+                            shape: BoxShape.circle,
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => confirmarEliminacion(id, index),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
     );
   }
 }
