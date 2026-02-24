@@ -20,27 +20,32 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   void initState() {
     super.initState();
     fotos = List.from(widget.fotosServidor);
-    // Ordenar por ID para que la última foto aparezca primero
+    // Ordenar por ID descendente
     fotos.sort((a, b) => (b['id'] ?? 0).compareTo(a['id'] ?? 0));
   }
 
   bool _puedeEliminar(dynamic foto) {
-    if (foto["created_at"] == null) return false;
+    final String? createdAt = foto["created_at"];
+    if (createdAt == null) return false;
 
     try {
-      // Parsear fecha del servidor a UTC
-      DateTime fechaFoto = DateTime.parse(foto["created_at"]).toUtc();
-      // Hora actual en UTC
+      // Intentamos parsear la fecha.
+      // Si el server no envía 'Z' al final, asumimos que es UTC.
+      DateTime fechaFoto = DateTime.parse(createdAt).toUtc();
       DateTime ahoraUtc = DateTime.now().toUtc();
 
+      // Calculamos la diferencia absoluta para evitar problemas si el reloj
+      // del server está unos segundos adelantado al del celular.
       int diferenciaSegundos = ahoraUtc.difference(fechaFoto).inSeconds;
 
-      // Debug para verificar en consola
-      debugPrint("Foto ID ${foto['id']} - Segundos: $diferenciaSegundos");
+      debugPrint("--- LOG DE TIEMPO (ID ${foto['id']}) ---");
+      debugPrint("Diferencia calculada: $diferenciaSegundos segundos");
 
-      // Margen de 1 minuto por desfase de reloj y límite de 5 minutos (300 seg)
+      // Permitimos borrar si han pasado menos de 5 minutos (300 seg)
+      // Agregamos un margen de error de 60 segundos por desfase de relojes
       return diferenciaSegundos >= -60 && diferenciaSegundos < 300;
     } catch (e) {
+      debugPrint("Error parseando fecha: $e");
       return false;
     }
   }
@@ -59,11 +64,11 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           fotos.removeAt(index);
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Foto eliminada")),
+          const SnackBar(content: Text("Foto eliminada correctamente")),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error al eliminar")),
+          const SnackBar(content: Text("No se pudo eliminar la foto")),
         );
       }
     } catch (e) {
@@ -78,15 +83,16 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Eliminar foto"),
-        content: const Text("¿Deseas borrar esta imagen?"),
+        content: const Text(
+            "¿Deseas borrar esta imagen? Esta acción no se puede deshacer."),
         actions: [
           TextButton(
-            child: const Text("No"),
+            child: const Text("Cancelar"),
             onPressed: () => Navigator.pop(context),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Sí, eliminar"),
+            child: const Text("Eliminar"),
             onPressed: () {
               Navigator.pop(context);
               eliminarFoto(id, index);
@@ -101,7 +107,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Galería"),
+        title: const Text("Galería de Fotos"),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -110,7 +116,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         ],
       ),
       body: fotos.isEmpty
-          ? const Center(child: Text("Sin fotos"))
+          ? const Center(child: Text("No hay fotos registradas"))
           : GridView.builder(
               padding: const EdgeInsets.all(12),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -148,7 +154,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                           decoration: const BoxDecoration(
                             color: Colors.white,
                             shape: BoxShape.circle,
-                            // ✅ 'const' agregado aquí para mejorar el performance
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black26,

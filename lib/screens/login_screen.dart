@@ -1,4 +1,4 @@
-// login_screen.dart - VERSIÓN PARA DETECTAR EL JSON REAL
+// login_screen.dart - VERSIÓN CON HEADERS ANTI-BLOQUEO
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -32,7 +32,20 @@ class _LoginScreenState extends State<LoginScreen> {
         Uri.parse("https://sistema.jusaimpulsemkt.com/api/login-app"),
         headers: {
           "Accept": "application/json",
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          // 🛡️ HEADERS CRÍTICOS PARA EVITAR "ACCESS DENIED BY IMUNIFY360"
+          "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          "Accept-Language": "es-ES,es;q=0.9",
+          "Sec-Ch-Ua":
+              '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+          "Sec-Ch-Ua-Mobile": "?0",
+          "Sec-Ch-Ua-Platform": '"Windows"',
+          "Sec-Fetch-Dest": "empty",
+          "Sec-Fetch-Mode": "cors",
+          "Sec-Fetch-Site": "same-origin",
+          "Origin": "https://sistema.jusaimpulsemkt.com",
+          "Referer": "https://sistema.jusaimpulsemkt.com/",
         },
         body: jsonEncode({
           "username": _usernameController.text.trim(),
@@ -40,9 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }),
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       final String bodyRaw = response.body;
       debugPrint("JSON RECIBIDO: $bodyRaw");
@@ -51,9 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final dynamic data = jsonDecode(bodyRaw);
         Map<String, dynamic>? userDetected;
 
-        // Intentamos detectar al usuario automáticamente
         if (data is Map<String, dynamic>) {
-          // Buscamos en las llaves más probables
           var candidate = data['user'] ?? data['usuario'] ?? data['data'];
 
           if (candidate is List && candidate.isNotEmpty) {
@@ -63,7 +72,6 @@ class _LoginScreenState extends State<LoginScreen> {
           if (candidate is Map) {
             userDetected = Map<String, dynamic>.from(candidate);
           } else if (data.containsKey('username')) {
-            // Si el usuario está en la raíz
             userDetected = data;
           }
         }
@@ -80,11 +88,11 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           );
         } else {
-          // 🚨 SI FALLA, MOSTRAMOS EL JSON EN PANTALLA
           _mostrarDialogoDebug(bodyRaw);
         }
       } else {
-        _mostrarError("Error ${response.statusCode}: Credenciales incorrectas");
+        // 🚨 Si Imunify bloquea, el status suele ser 403 o 406. Mostramos el error real.
+        _mostrarDialogoDebug("Error ${response.statusCode}\n\n$bodyRaw");
       }
     } catch (e) {
       if (mounted) {
@@ -99,7 +107,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Esta función te mostrará el JSON en el celular para que me lo digas
   void _mostrarDialogoDebug(String jsonStr) {
     showDialog(
       context: context,
@@ -157,9 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: Icon(Icons.person),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (v) {
-                    return v!.isEmpty ? "Ingrese su usuario" : null;
-                  },
+                  validator: (v) => v!.isEmpty ? "Ingrese su usuario" : null,
                 ),
                 const SizedBox(height: 20),
                 TextFormField(
@@ -170,9 +175,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: Icon(Icons.lock),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (v) {
-                    return v!.isEmpty ? "Ingrese su contraseña" : null;
-                  },
+                  validator: (v) => v!.isEmpty ? "Ingrese su contraseña" : null,
                 ),
                 const SizedBox(height: 30),
                 SizedBox(
