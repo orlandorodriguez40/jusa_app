@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'dart:async'; // Añadido para el Timer
 
 class PhotoGalleryScreen extends StatefulWidget {
   final List<dynamic> fotosServidor;
@@ -15,36 +16,52 @@ class PhotoGalleryScreen extends StatefulWidget {
 
 class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   late List<dynamic> fotos;
+  // Guardamos el momento exacto en que se entra a la pantalla
+  late DateTime _horaEntradaPantalla;
 
   @override
   void initState() {
     super.initState();
+    _horaEntradaPantalla = DateTime.now();
     fotos = List.from(widget.fotosServidor);
     // Ordenar por ID descendente para que las recientes aparezcan primero
     fotos.sort((a, b) => (b['id'] ?? 0).compareTo(a['id'] ?? 0));
+
+    // Opcional: Refrescar la pantalla automáticamente a los 5 minutos
+    // para que el icono desaparezca si el usuario se queda mirando la galería
+    Timer(const Duration(minutes: 5), () {
+      if (mounted) setState(() {});
+    });
   }
 
-  /// Procesa la fecha en formato DD/MM/YYYY y determina si es de hoy
-  bool _esFotoDeHoy(dynamic foto) {
+  /// Procesa la fecha y determina si se permite eliminar
+  bool _puedeEliminar(dynamic foto) {
     final String? fechaRaw =
         foto["created_at"] ?? foto["fecha"] ?? foto["updated_at"];
 
     if (fechaRaw == null) return false;
 
     try {
-      // Separamos DD/MM/YYYY
-      List<String> partes = fechaRaw.split('/');
+      // 1. Validamos si es de hoy (Acepta DD/MM/YYYY o DD-MM-YYYY)
+      List<String> partes = fechaRaw.split(RegExp(r'[/-]'));
       if (partes.length == 3) {
-        // Reconstruimos a formato ISO (YYYY-MM-DD) para que DateTime lo entienda
         String fechaIso =
             "${partes[2]}-${partes[1].padLeft(2, '0')}-${partes[0].padLeft(2, '0')}";
         DateTime fechaFoto = DateTime.parse(fechaIso);
         DateTime ahora = DateTime.now();
 
-        // Comparamos solo año, mes y día
-        return fechaFoto.year == ahora.year &&
+        bool esHoy = fechaFoto.year == ahora.year &&
             fechaFoto.month == ahora.month &&
             fechaFoto.day == ahora.day;
+
+        if (!esHoy) return false;
+
+        // 2. Lógica de los 5 minutos
+        // Permitimos borrar solo si han pasado menos de 5 min desde que se abrió la galería
+        int segundosTranscurridos =
+            ahora.difference(_horaEntradaPantalla).inSeconds;
+
+        return segundosTranscurridos < 300; // 300 segundos = 5 minutos
       }
       return false;
     } catch (e) {
@@ -113,7 +130,12 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => setState(() {}),
+            onPressed: () {
+              // Al refrescar manualmente, reiniciamos el cronómetro de 5 min
+              setState(() {
+                _horaEntradaPantalla = DateTime.now();
+              });
+            },
           )
         ],
       ),
@@ -123,7 +145,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: 0.85, // Ajuste para dar espacio al texto inferior
+          childAspectRatio: 0.85,
         ),
         itemCount: fotos.length,
         itemBuilder: (context, index) {
@@ -134,7 +156,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
               fotoData["created_at"] ?? fotoData["fecha"] ?? "";
           final String imageUrl = "${PhotoGalleryScreen.baseImageUrl}$ruta";
 
-          final bool permiteEliminar = _esFotoDeHoy(fotoData);
+          final bool permiteEliminar = _puedeEliminar(fotoData);
 
           return Container(
             decoration: BoxDecoration(
