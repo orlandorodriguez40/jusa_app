@@ -132,8 +132,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   top: 8,
                   child: Container(
                     decoration: BoxDecoration(
-                      // ✅ CORRECCIÓN: Usando .withValues(alpha: ...) en lugar de .withOpacity
-                      color: Colors.white.withValues(alpha: 0.7),
+                      // ✅ SOLUCIÓN: Usamos .withAlpha (0-255) para evitar el deprecado y el error de compilación.
+                      // 0.7 de opacidad equivale aproximadamente a 178 de alpha (255 * 0.7)
+                      color: Colors.white.withAlpha(178),
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
