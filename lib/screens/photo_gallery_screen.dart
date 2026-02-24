@@ -19,38 +19,38 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   @override
   void initState() {
     super.initState();
-    // Clonamos la lista y la ordenamos por ID para que la nueva salga arriba
     fotos = List.from(widget.fotosServidor);
+    // Ordenar para que la más nueva sea la primera
     fotos.sort((a, b) => (b['id'] ?? 0).compareTo(a['id'] ?? 0));
   }
 
-  // Lógica de tiempo mejorada
   bool _puedeEliminar(dynamic foto) {
-    if (foto["created_at"] == null) return false;
+    // -------------------------------------------------------
+    // 🧪 PRUEBA DE DIAGNÓSTICO: FORZAMOS EL BOTÓN A APARECER
+    // -------------------------------------------------------
 
-    try {
-      // Parseo flexible: intentamos leer la fecha del servidor
-      DateTime fechaFoto = DateTime.parse(foto["created_at"]).toUtc();
-      DateTime ahora = DateTime.now().toUtc();
+    final String? createdAt = foto["created_at"];
+    if (createdAt != null) {
+      try {
+        DateTime fechaFoto = DateTime.parse(createdAt).toUtc();
+        DateTime ahoraUtc = DateTime.now().toUtc();
+        int diferenciaSegundos = ahoraUtc.difference(fechaFoto).inSeconds;
 
-      int diferenciaSegundos = ahora.difference(fechaFoto).inSeconds;
-
-      // Imprime esto en tu consola para ver el desfase real
-      debugPrint("ID: ${foto['id']} | Segundos: $diferenciaSegundos");
-
-      // Mostramos el botón si han pasado menos de 300 segundos (5 min)
-      // Agregamos un margen de 60 segundos por si los relojes no coinciden
-      return diferenciaSegundos < 300 && diferenciaSegundos > -60;
-    } catch (e) {
-      return false;
+        // Esto aparecerá en tu consola de VS Code/Android Studio
+        debugPrint(
+            "FOTO ID ${foto['id']} -> Segundos transcurridos: $diferenciaSegundos");
+      } catch (e) {
+        debugPrint("Error parseando fecha: $e");
+      }
     }
+
+    return true; // <--- Cambiado a TRUE para que el icono salga sí o sí
   }
 
   Future<void> eliminarFoto(int id, int index) async {
     try {
       final url = Uri.parse(
           "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$id");
-
       final response = await http.delete(url);
 
       if (!mounted) return;
@@ -64,12 +64,13 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error al eliminar la foto")),
+          const SnackBar(
+              content: Text("El servidor no permitió la eliminación")),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Error de conexión")),
+        const SnackBar(content: Text("Error de red")),
       );
     }
   }
@@ -78,18 +79,18 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Confirmar eliminación"),
-        content: const Text("¿Seguro que quieres eliminar esta foto?"),
+        title: const Text("Confirmar"),
+        content: const Text("¿Quieres eliminar esta foto definitivamente?"),
         actions: [
           TextButton(
             child: const Text("Cancelar"),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.pop(context),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text("Eliminar"),
             onPressed: () {
-              Navigator.of(context).pop();
+              Navigator.pop(context);
               eliminarFoto(id, index);
             },
           ),
@@ -102,7 +103,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Fotos tomadas"),
+        title: const Text("Galería (Modo Debug)"),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -124,38 +125,33 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           final int id = fotoData["id"] ?? 0;
           final String imageUrl = "${PhotoGalleryScreen.baseImageUrl}$ruta";
 
-          // Aplicamos la restricción aquí
-          final bool visible = _puedeEliminar(fotoData);
+          final bool mostrarBoton = _puedeEliminar(fotoData);
 
           return Stack(
             children: [
               Positioned.fill(
-                child: Image.network(
-                  imageUrl,
-                  key: ValueKey(imageUrl),
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
-                    return const Center(child: CircularProgressIndicator());
-                  },
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.broken_image,
-                    size: 40,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.broken_image),
                   ),
                 ),
               ),
-              // Solo mostramos el Positioned si está en el rango de 5 min
-              if (visible)
+              if (mostrarBoton)
                 Positioned(
-                  right: 4,
-                  top: 4,
+                  right: 5,
+                  top: 5,
                   child: Container(
                     decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(color: Colors.black26, blurRadius: 3)
-                        ]),
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: Colors.black26, blurRadius: 4)
+                      ],
+                    ),
                     child: IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),
                       onPressed: () => confirmarEliminacion(id, index),
