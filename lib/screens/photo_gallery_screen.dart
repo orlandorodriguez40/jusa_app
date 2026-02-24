@@ -19,27 +19,27 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   @override
   void initState() {
     super.initState();
-    // Copiamos la lista y la ordenamos por fecha (más reciente arriba)
     fotos = List.from(widget.fotosServidor);
-    fotos.sort(
-        (a, b) => (b['created_at'] ?? '').compareTo(a['created_at'] ?? ''));
+    // Ordenar por ID para que la última foto aparezca primero
+    fotos.sort((a, b) => (b['id'] ?? 0).compareTo(a['id'] ?? 0));
   }
 
   bool _puedeEliminar(dynamic foto) {
     if (foto["created_at"] == null) return false;
 
     try {
-      // 1. Convertimos la fecha del servidor (Laravel suele enviar UTC)
+      // Parsear fecha del servidor a UTC
       DateTime fechaFoto = DateTime.parse(foto["created_at"]).toUtc();
-
-      // 2. Obtenemos la hora actual en UTC para una comparación exacta
+      // Hora actual en UTC
       DateTime ahoraUtc = DateTime.now().toUtc();
 
-      // 3. Calculamos la diferencia de tiempo
-      Duration diferencia = ahoraUtc.difference(fechaFoto);
+      int diferenciaSegundos = ahoraUtc.difference(fechaFoto).inSeconds;
 
-      // Solo permitimos eliminar si han pasado menos de 5 minutos
-      return diferencia.inMinutes >= 0 && diferencia.inMinutes < 5;
+      // Debug para verificar en consola
+      debugPrint("Foto ID ${foto['id']} - Segundos: $diferenciaSegundos");
+
+      // Margen de 1 minuto por desfase de reloj y límite de 5 minutos (300 seg)
+      return diferenciaSegundos >= -60 && diferenciaSegundos < 300;
     } catch (e) {
       return false;
     }
@@ -59,16 +59,16 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           fotos.removeAt(index);
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Foto eliminada correctamente")),
+          const SnackBar(content: Text("Foto eliminada")),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("No se pudo eliminar la foto")),
+          const SnackBar(content: Text("Error al eliminar")),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Error de conexión al eliminar")),
+        const SnackBar(content: Text("Error de conexión")),
       );
     }
   }
@@ -77,17 +77,16 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Confirmar eliminación"),
-        content: const Text(
-            "¿Seguro que quieres borrar esta foto? Solo tienes 5 minutos desde que la tomaste."),
+        title: const Text("Eliminar foto"),
+        content: const Text("¿Deseas borrar esta imagen?"),
         actions: [
           TextButton(
-            child: const Text("Cancelar"),
+            child: const Text("No"),
             onPressed: () => Navigator.pop(context),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Eliminar"),
+            child: const Text("Sí, eliminar"),
             onPressed: () {
               Navigator.pop(context);
               eliminarFoto(id, index);
@@ -102,17 +101,16 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Fotos tomadas"),
+        title: const Text("Galería"),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => setState(
-                () {}), // Refresca para actualizar el tiempo de los botones
+            onPressed: () => setState(() {}),
           )
         ],
       ),
       body: fotos.isEmpty
-          ? const Center(child: Text("No hay fotos registradas"))
+          ? const Center(child: Text("Sin fotos"))
           : GridView.builder(
               padding: const EdgeInsets.all(12),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -147,9 +145,17 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                         right: 8,
                         top: 8,
                         child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white.withAlpha(180),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
                             shape: BoxShape.circle,
+                            // ✅ 'const' agregado aquí para mejorar el performance
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black26,
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              )
+                            ],
                           ),
                           child: IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
