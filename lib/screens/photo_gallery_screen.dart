@@ -20,31 +20,21 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   void initState() {
     super.initState();
     fotos = List.from(widget.fotosServidor);
-    // Ordenar para que la más nueva sea la primera
+    // Ordenar por ID descendente (más nueva arriba)
     fotos.sort((a, b) => (b['id'] ?? 0).compareTo(a['id'] ?? 0));
   }
 
-  bool _puedeEliminar(dynamic foto) {
-    // -------------------------------------------------------
-    // 🧪 PRUEBA DE DIAGNÓSTICO: FORZAMOS EL BOTÓN A APARECER
-    // -------------------------------------------------------
-
+  // Lógica principal de validación de tiempo
+  int _obtenerDiferenciaSegundos(dynamic foto) {
     final String? createdAt = foto["created_at"];
-    if (createdAt != null) {
-      try {
-        DateTime fechaFoto = DateTime.parse(createdAt).toUtc();
-        DateTime ahoraUtc = DateTime.now().toUtc();
-        int diferenciaSegundos = ahoraUtc.difference(fechaFoto).inSeconds;
-
-        // Esto aparecerá en tu consola de VS Code/Android Studio
-        debugPrint(
-            "FOTO ID ${foto['id']} -> Segundos transcurridos: $diferenciaSegundos");
-      } catch (e) {
-        debugPrint("Error parseando fecha: $e");
-      }
+    if (createdAt == null) return 999999; // Valor alto si no hay fecha
+    try {
+      DateTime fechaFoto = DateTime.parse(createdAt).toUtc();
+      DateTime ahoraUtc = DateTime.now().toUtc();
+      return ahoraUtc.difference(fechaFoto).inSeconds;
+    } catch (e) {
+      return 999999;
     }
-
-    return true; // <--- Cambiado a TRUE para que el icono salga sí o sí
   }
 
   Future<void> eliminarFoto(int id, int index) async {
@@ -103,7 +93,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Galería (Modo Debug)"),
+        title: const Text("Galería"),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -116,7 +106,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
+          mainAxisSpacing: 30, // Espacio para el debug visual
         ),
         itemCount: fotos.length,
         itemBuilder: (context, index) {
@@ -125,39 +115,60 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           final int id = fotoData["id"] ?? 0;
           final String imageUrl = "${PhotoGalleryScreen.baseImageUrl}$ruta";
 
-          final bool mostrarBoton = _puedeEliminar(fotoData);
+          // Cálculo de tiempo
+          final int segundos = _obtenerDiferenciaSegundos(fotoData);
 
-          return Stack(
+          // REGLA: Mostrar botón solo si tiene menos de 5 minutos (300 seg)
+          // Se incluye un margen de -60 por si el reloj del server está adelantado
+          final bool mostrarBoton = segundos < 300 && segundos > -60;
+
+          return Column(
             children: [
-              Positioned.fill(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.broken_image),
-                  ),
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.broken_image),
+                        ),
+                      ),
+                    ),
+                    if (mostrarBoton)
+                      Positioned(
+                        right: 5,
+                        top: 5,
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(color: Colors.black26, blurRadius: 4)
+                            ],
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => confirmarEliminacion(id, index),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              if (mostrarBoton)
-                Positioned(
-                  right: 5,
-                  top: 5,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: Colors.black26, blurRadius: 4)
-                      ],
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => confirmarEliminacion(id, index),
-                    ),
-                  ),
+              const SizedBox(height: 4),
+              // Texto de diagnóstico (quitar cuando funcione perfecto)
+              Text(
+                "$segundos seg",
+                style: TextStyle(
+                  color: mostrarBoton ? Colors.green : Colors.grey,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
             ],
           );
         },
