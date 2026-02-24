@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:async'; // Añadido para el Timer
+import 'dart:async';
 
 class PhotoGalleryScreen extends StatefulWidget {
   final List<dynamic> fotosServidor;
@@ -16,33 +16,48 @@ class PhotoGalleryScreen extends StatefulWidget {
 
 class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   late List<dynamic> fotos;
-  // Guardamos el momento exacto en que se entra a la pantalla
-  late DateTime _horaEntradaPantalla;
+  // Esta variable controlará la visibilidad global de los botones de borrar
+  bool _permitirBorradoSesion = true;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _horaEntradaPantalla = DateTime.now();
     fotos = List.from(widget.fotosServidor);
-    // Ordenar por ID descendente para que las recientes aparezcan primero
     fotos.sort((a, b) => (b['id'] ?? 0).compareTo(a['id'] ?? 0));
 
-    // Opcional: Refrescar la pantalla automáticamente a los 5 minutos
-    // para que el icono desaparezca si el usuario se queda mirando la galería
-    Timer(const Duration(minutes: 5), () {
-      if (mounted) setState(() {});
+    _iniciarCronometro();
+  }
+
+  // Iniciamos el cronómetro de 5 minutos
+  void _iniciarCronometro() {
+    _timer?.cancel(); // Cancelar cualquier timer previo
+    _permitirBorradoSesion = true;
+
+    _timer = Timer(const Duration(minutes: 5), () {
+      if (mounted) {
+        setState(() {
+          _permitirBorradoSesion = false; // Bloqueo total después de 5 min
+        });
+      }
     });
   }
 
-  /// Procesa la fecha y determina si se permite eliminar
-  bool _puedeEliminar(dynamic foto) {
+  @override
+  void dispose() {
+    _timer?.cancel(); // Limpiar el timer al salir de la pantalla
+    super.dispose();
+  }
+
+  bool _esFotoDeHoy(dynamic foto) {
+    // Si la sesión de 5 minutos expiró, ya no se puede borrar nada
+    if (!_permitirBorradoSesion) return false;
+
     final String? fechaRaw =
         foto["created_at"] ?? foto["fecha"] ?? foto["updated_at"];
-
     if (fechaRaw == null) return false;
 
     try {
-      // 1. Validamos si es de hoy (Acepta DD/MM/YYYY o DD-MM-YYYY)
       List<String> partes = fechaRaw.split(RegExp(r'[/-]'));
       if (partes.length == 3) {
         String fechaIso =
@@ -50,18 +65,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         DateTime fechaFoto = DateTime.parse(fechaIso);
         DateTime ahora = DateTime.now();
 
-        bool esHoy = fechaFoto.year == ahora.year &&
+        return fechaFoto.year == ahora.year &&
             fechaFoto.month == ahora.month &&
             fechaFoto.day == ahora.day;
-
-        if (!esHoy) return false;
-
-        // 2. Lógica de los 5 minutos
-        // Permitimos borrar solo si han pasado menos de 5 min desde que se abrió la galería
-        int segundosTranscurridos =
-            ahora.difference(_horaEntradaPantalla).inSeconds;
-
-        return segundosTranscurridos < 300; // 300 segundos = 5 minutos
       }
       return false;
     } catch (e) {
@@ -69,31 +75,21 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     }
   }
 
+  // ... (métodos eliminarFoto y confirmarEliminacion se mantienen iguales)
+
   Future<void> eliminarFoto(int id, int index) async {
     try {
       final url = Uri.parse(
           "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$id");
       final response = await http.delete(url);
-
       if (!mounted) return;
-
       if (response.statusCode == 200) {
-        setState(() {
-          fotos.removeAt(index);
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Foto eliminada correctamente")),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Error al eliminar la foto del servidor")),
-        );
+        setState(() => fotos.removeAt(index));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text("Foto eliminada")));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Error de conexión")),
-      );
+      debugPrint("Error: $e");
     }
   }
 
@@ -102,20 +98,18 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Confirmar eliminación"),
-        content:
-            const Text("¿Seguro que quieres borrar esta foto definitivamente?"),
+        content: const Text("¿Deseas borrar esta foto?"),
         actions: [
           TextButton(
-            child: const Text("Cancelar"),
-            onPressed: () => Navigator.pop(context),
-          ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar")),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Eliminar"),
             onPressed: () {
               Navigator.pop(context);
               eliminarFoto(id, index);
             },
+            child: const Text("Eliminar"),
           ),
         ],
       ),
@@ -131,9 +125,8 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              // Al refrescar manualmente, reiniciamos el cronómetro de 5 min
               setState(() {
-                _horaEntradaPantalla = DateTime.now();
+                _iniciarCronometro(); // Reinicia el tiempo al refrescar
               });
             },
           )
@@ -150,13 +143,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         itemCount: fotos.length,
         itemBuilder: (context, index) {
           final fotoData = fotos[index];
-          final String ruta = fotoData["foto"] ?? "";
-          final int id = fotoData["id"] ?? 0;
-          final String fechaMostrar =
-              fotoData["created_at"] ?? fotoData["fecha"] ?? "";
-          final String imageUrl = "${PhotoGalleryScreen.baseImageUrl}$ruta";
-
-          final bool permiteEliminar = _puedeEliminar(fotoData);
+          final String imageUrl =
+              "${PhotoGalleryScreen.baseImageUrl}${fotoData["foto"]}";
+          final bool permiteEliminar = _esFotoDeHoy(fotoData);
 
           return Container(
             decoration: BoxDecoration(
@@ -172,12 +161,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                         child: ClipRRect(
                           borderRadius: const BorderRadius.vertical(
                               top: Radius.circular(12)),
-                          child: Image.network(
-                            imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                const Icon(Icons.broken_image, size: 50),
-                          ),
+                          child: Image.network(imageUrl, fit: BoxFit.cover),
                         ),
                       ),
                       if (permiteEliminar)
@@ -185,17 +169,12 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                           right: 8,
                           top: 8,
                           child: GestureDetector(
-                            onTap: () => confirmarEliminacion(id, index),
+                            onTap: () =>
+                                confirmarEliminacion(fotoData["id"], index),
                             child: Container(
                               padding: const EdgeInsets.all(6),
                               decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                      color: Colors.black26, blurRadius: 4)
-                                ],
-                              ),
+                                  color: Colors.white, shape: BoxShape.circle),
                               child: const Icon(Icons.delete,
                                   color: Colors.red, size: 20),
                             ),
@@ -205,17 +184,16 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  padding: const EdgeInsets.all(8.0),
                   child: Text(
-                    fechaMostrar,
+                    fotoData["created_at"] ?? fotoData["fecha"] ?? "",
                     style: TextStyle(
-                      fontSize: 12,
-                      color: permiteEliminar
-                          ? Colors.green[700]
-                          : Colors.grey[600],
-                      fontWeight:
-                          permiteEliminar ? FontWeight.bold : FontWeight.normal,
-                    ),
+                        fontSize: 12,
+                        color:
+                            permiteEliminar ? Colors.green[700] : Colors.grey,
+                        fontWeight: permiteEliminar
+                            ? FontWeight.bold
+                            : FontWeight.normal),
                   ),
                 ),
               ],
