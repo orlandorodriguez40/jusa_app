@@ -1,6 +1,6 @@
 import java.util.Properties
 
-// 1. Configuración para leer versiones (Sintaxis Kotlin DSL)
+// 1. Configuración para leer versiones
 val localProperties = Properties()
 val localPropertiesFile = rootProject.projectDir.resolve("local.properties")
 if (localPropertiesFile.exists()) {
@@ -19,7 +19,9 @@ plugins {
 android {
     namespace = "com.example.login_app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    
+    // CAMBIO AQUÍ: Forzamos la versión que el compilador te pidió
+    ndkVersion = "27.0.12077973" 
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -35,14 +37,12 @@ android {
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         
-        // Uso de las variables declaradas arriba
         versionCode = flutterVersionCode.toInt()
         versionName = flutterVersionName
     }
 
     buildTypes {
         getByName("release") {
-            // Usamos la configuración de debug para que el build no pida llaves reales
             signingConfig = signingConfigs.getByName("debug")
         }
     }
