@@ -5,11 +5,18 @@ import 'dart:async';
 
 class PhotoGalleryScreen extends StatefulWidget {
   final List<dynamic> fotosServidor;
+  final dynamic asignacion; // Recibido del dashboard
+  final int nivelId; // Recibido del dashboard
 
   static const String baseImageUrl =
       "https://sistema.jusaimpulsemkt.com/storage/";
 
-  const PhotoGalleryScreen({super.key, required this.fotosServidor});
+  const PhotoGalleryScreen({
+    super.key,
+    required this.fotosServidor,
+    required this.asignacion,
+    required this.nivelId,
+  });
 
   @override
   State<PhotoGalleryScreen> createState() => _PhotoGalleryScreenState();
@@ -55,14 +62,22 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   bool _puedeEliminar(dynamic foto) {
-    if (_cargandoTiempos) return false;
+    // Solo el nivel 3 (chofer) puede eliminar sus fotos recientes
+    if (widget.nivelId != 3 || _cargandoTiempos) {
+      return false;
+    }
+
     String id = foto['id'].toString();
     int? registro = _tiemposFotos[id];
-    if (registro == null) return false;
+    if (registro == null) {
+      return false;
+    }
 
     final String? fechaRaw =
         foto["created_at"] ?? foto["fecha"] ?? foto["updated_at"];
-    if (fechaRaw == null) return false;
+    if (fechaRaw == null) {
+      return false;
+    }
 
     try {
       List<String> partes = fechaRaw.split(RegExp(r'[/-]'));
@@ -86,184 +101,227 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   Future<void> eliminarFoto(int id, int index) async {
-    // 🛡️ Capturamos el Messenger antes del await para evitar errores de context
     final messenger = ScaffoldMessenger.of(context);
-
     try {
       final url = Uri.parse(
           "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$id");
       final response = await http.delete(url);
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       if (response.statusCode == 200) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove("timestamp_foto_$id");
-
         setState(() => fotos.removeAt(index));
-
         messenger.showSnackBar(
-          const SnackBar(content: Text("Foto eliminada correctamente")),
-        );
+            const SnackBar(content: Text("Foto eliminada correctamente")));
       }
     } catch (e) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text("Error de conexión al intentar eliminar")),
-      );
+      if (mounted) {
+        messenger
+            .showSnackBar(const SnackBar(content: Text("Error de conexión")));
+      }
     }
-  }
-
-  void confirmarEliminacion(int id, int index) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Confirmar"),
-        content: const Text("¿Deseas eliminar esta foto permanentemente?"),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancelar")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              Navigator.pop(context);
-              eliminarFoto(id, index);
-            },
-            child:
-                const Text("Eliminar", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool esAuditoria = (widget.nivelId == 2 || widget.nivelId == 4);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Galería de Visita"),
+        title: const Text("Detalle de Visita", style: TextStyle(fontSize: 18)),
         backgroundColor: const Color(0xFF424949),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => setState(() {}),
-          )
-        ],
       ),
       body: _cargandoTiempos
           ? const Center(child: CircularProgressIndicator())
-          : fotos.isEmpty
-              ? _buildEmptyState()
-              : _buildGrid(),
+          : CustomScrollView(
+              slivers: [
+                if (esAuditoria) ...[
+                  SliverToBoxAdapter(child: _buildHeaderAuditoria()),
+                ],
+                if (fotos.isEmpty) ...[
+                  SliverFillRemaining(child: _buildEmptyState()),
+                ] else ...[
+                  SliverPadding(
+                    padding: const EdgeInsets.all(12),
+                    sliver: _buildGridSliver(),
+                  ),
+                ],
+              ],
+            ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.no_photography_outlined,
-              size: 80, color: Colors.grey),
-          const SizedBox(height: 20),
-          const Text(
-            "NO HAY FOTOS PARA MOSTRAR",
-            style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.blueGrey),
+  Widget _buildHeaderAuditoria() {
+    return Column(
+      children: [
+        Container(
+          height: 180,
+          width: double.infinity,
+          color: Colors.grey[300],
+          child: Stack(
+            children: [
+              const Center(
+                  child:
+                      Icon(Icons.map_outlined, size: 60, color: Colors.grey)),
+              Positioned(
+                bottom: 15,
+                left: 15,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue),
+                  ),
+                  child: Text(
+                    "📍 ${widget.asignacion["plaza"]}",
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
-          const Text("Desliza hacia abajo o usa el botón refrescar",
-              style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Regresar"),
-          )
-        ],
-      ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("DETALLES DEL REPORTE",
+                  style: TextStyle(
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.location_city,
+                      color: Colors.indigo, size: 20),
+                  const SizedBox(width: 8),
+                  Text("${widget.asignacion["ciudad"]}",
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(Icons.calendar_today,
+                      color: Colors.grey, size: 18),
+                  const SizedBox(width: 8),
+                  Text("Fecha: ${widget.asignacion["fecha"]}"),
+                  const SizedBox(width: 15),
+                  const Icon(Icons.access_time, color: Colors.grey, size: 18),
+                  const SizedBox(width: 8),
+                  Text("Hora: ${widget.asignacion["hora"] ?? 'N/A'}"),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const Divider(thickness: 1, height: 1),
+      ],
     );
   }
 
-  Widget _buildGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.all(12),
+  Widget _buildGridSliver() {
+    return SliverGrid(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
         childAspectRatio: 0.8,
       ),
-      itemCount: fotos.length,
-      itemBuilder: (context, index) {
-        final f = fotos[index];
-        final String imageUrl =
-            "${PhotoGalleryScreen.baseImageUrl}${f["foto"]}";
-        final bool permiteEliminar = _puedeEliminar(f);
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          final f = fotos[index];
+          final String imageUrl =
+              "${PhotoGalleryScreen.baseImageUrl}${f["foto"]}";
+          final bool permiteEliminar = _puedeEliminar(f);
 
-        return Card(
-          elevation: 2,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Column(
-            children: [
-              Expanded(
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(12)),
-                        child: Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const Icon(Icons.broken_image, size: 50),
-                        ),
-                      ),
-                    ),
-                    if (permiteEliminar)
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: GestureDetector(
-                          onTap: () => confirmarEliminacion(f["id"], index),
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(color: Colors.black26, blurRadius: 4)
-                              ],
-                            ),
-                            child: const Icon(Icons.delete,
-                                color: Colors.red, size: 20),
+          return Card(
+            elevation: 2,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Column(
+              children: [
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(12)),
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) =>
+                                const Icon(Icons.broken_image),
                           ),
                         ),
                       ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(
-                  f["created_at"] ?? f["fecha"] ?? "Sin fecha",
-                  style: TextStyle(
-                    fontSize: 11,
-                    color:
-                        permiteEliminar ? Colors.green[800] : Colors.grey[600],
-                    fontWeight:
-                        permiteEliminar ? FontWeight.bold : FontWeight.normal,
+                      if (permiteEliminar)
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: GestureDetector(
+                            onTap: () => _confirmarEliminacion(f["id"], index),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(
+                                  color: Colors.white, shape: BoxShape.circle),
+                              child: const Icon(Icons.delete,
+                                  color: Colors.red, size: 20),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    f["created_at"] ?? f["fecha"] ?? "Sin fecha",
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: permiteEliminar ? Colors.green : Colors.grey),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+        childCount: fotos.length,
+      ),
     );
+  }
+
+  void _confirmarEliminacion(int id, int index) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Eliminar"),
+        content: const Text("¿Deseas borrar esta foto?"),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text("No")),
+          TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                eliminarFoto(id, index);
+              },
+              child: const Text("Sí, borrar")),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return const Center(child: Text("NO HAY FOTOS"));
   }
 }
