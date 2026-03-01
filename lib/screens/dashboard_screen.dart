@@ -67,7 +67,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!serviceEnabled) {
       return Future.error('El GPS está desactivado.');
     }
-
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -81,18 +80,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<File> _addWatermark(File imageFile, Position pos) async {
     final bytes = await imageFile.readAsBytes();
     img.Image? originalImage = img.decodeImage(bytes);
-    if (originalImage == null) return imageFile;
-
+    if (originalImage == null) {
+      return imageFile;
+    }
     String timestamp = DateTime.now().toString().split('.')[0];
     String text =
         "LAT: ${pos.latitude.toStringAsFixed(6)}\nLON: ${pos.longitude.toStringAsFixed(6)}\nFECHA: $timestamp";
-
     img.drawString(originalImage, text,
         font: img.arial24,
         x: 30,
         y: originalImage.height - 140,
         color: img.ColorRgba8(255, 255, 255, 255));
-
     final tempDir = await getTemporaryDirectory();
     final path =
         "${tempDir.path}/marked_${DateTime.now().millisecondsSinceEpoch}.jpg";
@@ -115,14 +113,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 )));
   }
 
-  // --- LÓGICA DE API ACTUALIZADA ---
   Future<void> _fetchAsignaciones() async {
     if (!mounted) return;
     setState(() => _loading = true);
-
     String apiUrl = "";
-
-    // Selección de API según el nivel_id solicitado
     if (widget.nivelId == 2) {
       apiUrl =
           "https://sistema.jusaimpulsemkt.com/api/asignaciones-supervisor-app/${widget.userId}";
@@ -130,28 +124,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       apiUrl =
           "https://sistema.jusaimpulsemkt.com/api/asignaciones-cliente-app/${widget.userId}";
     } else {
-      // Por defecto para Chofer (Nivel 3)
       apiUrl =
           "https://sistema.jusaimpulsemkt.com/api/mis-asignaciones-app/${widget.userId}";
     }
 
     try {
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: const {"Accept": "application/json"},
-      ).timeout(const Duration(seconds: 15));
-
+      final response = await http.get(Uri.parse(apiUrl), headers: const {
+        "Accept": "application/json"
+      }).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (mounted) {
           setState(() {
-            // Se asume que todas las APIs devuelven la lista en la llave "datos"
-            _asignaciones = data["datos"] ?? [];
+            _asignaciones =
+                (data["estatus"] == true) ? (data["datos"] ?? []) : [];
           });
         }
       }
     } catch (e) {
-      debugPrint("Error Fetch Dashboard: $e");
+      debugPrint("Error Fetch: $e");
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -170,25 +161,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
       return;
     }
-
     final ImagePicker picker = ImagePicker();
     final XFile? photo =
         await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
     if (photo == null || !mounted) return;
-
     setState(() => _sendingPhoto = true);
-
     try {
       File markedFile = await _addWatermark(File(photo.path), currentPosition);
       final request = http.MultipartRequest('POST',
           Uri.parse("https://sistema.jusaimpulsemkt.com/api/tomar-foto-app"));
-
       request.fields['asignacion_id'] = asignacion["id"].toString();
       request.fields['latitud'] = currentPosition.latitude.toString();
       request.fields['longitud'] = currentPosition.longitude.toString();
       request.files
           .add(await http.MultipartFile.fromPath('file', markedFile.path));
-
       final response = await request.send();
       if (mounted && response.statusCode == 200) {
         ScaffoldMessenger.of(context)
@@ -229,14 +215,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         backgroundColor: const Color(0xFF424949),
         centerTitle: true,
-        title: Text(
-          "PANEL ${_obtenerEtiquetaNivel(widget.nivelId)}",
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
+        title: Text("PANEL ${_obtenerEtiquetaNivel(widget.nivelId)}",
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
       ),
       body: Stack(
         children: [
@@ -246,10 +229,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 children: [
                   GestureDetector(
-                    onTap: _abrirPerfil,
-                    child: Image.asset("assets/images/logo-jusa-2-opt.png",
-                        height: 70),
-                  ),
+                      onTap: _abrirPerfil,
+                      child: Image.asset("assets/images/logo-jusa-2-opt.png",
+                          height: 70)),
                   const SizedBox(height: 10),
                   Text("Bienvenido: ${widget.userName}",
                       style: const TextStyle(
@@ -262,8 +244,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           if (_sendingPhoto)
             Container(
-                color: Colors.black26,
-                child: const Center(child: CircularProgressIndicator())),
+              color: Colors.black26,
+              child: const Center(child: CircularProgressIndicator()),
+            ),
         ],
       ),
     );
@@ -271,71 +254,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildMainContent() {
     if (_loading) return const Center(child: CircularProgressIndicator());
-
     if (_asignaciones.isEmpty) {
       return RefreshIndicator(
-        onRefresh: _fetchAsignaciones,
-        child: ListView(
-          children: [
+          onRefresh: _fetchAsignaciones,
+          child: ListView(children: [
             SizedBox(height: MediaQuery.of(context).size.height * 0.2),
             const Icon(Icons.assignment_late_outlined,
                 size: 80, color: Colors.grey),
-            const SizedBox(height: 20),
             const Center(
-              child: Text(
-                "NO HAY ASIGNACIONES",
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blueGrey),
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Center(
-                child: Text("Desliza hacia abajo para actualizar",
-                    style: TextStyle(color: Colors.grey))),
-          ],
-        ),
-      );
+                child: Text("NO HAY ASIGNACIONES",
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey))),
+          ]));
     }
-
     return RefreshIndicator(
       onRefresh: _fetchAsignaciones,
       child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
         itemCount: _asignaciones.length,
         itemBuilder: (context, index) {
           final asign = _asignaciones[index];
           return Card(
             margin: const EdgeInsets.symmetric(vertical: 8),
-            elevation: 2,
             child: Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Fecha: ${asign["fecha"]}",
+                  Text("Fecha: ${asign["fecha"]} ${asign["hora"] ?? ''}",
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   Text("Cliente: ${asign["cliente"]}"),
+                  Text(
+                      "Lugar: ${asign["plaza"] ?? asign["ciudad"] ?? 'No especificado'}"),
                   Text("Estatus: ${asign["estatus"]}"),
                   const Divider(),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      // Solo Chofer (3) y Supervisor (2) pueden tomar fotos
-                      if (widget.nivelId == 2 || widget.nivelId == 3) ...[
+                      if (widget.nivelId == 2 || widget.nivelId == 3)
                         IconButton(
-                          icon:
-                              const Icon(Icons.camera_alt, color: Colors.green),
-                          onPressed: () => _takePhoto(asign),
-                        ),
-                        const SizedBox(width: 10),
-                      ],
+                            icon: const Icon(Icons.camera_alt,
+                                color: Colors.green),
+                            onPressed: () => _takePhoto(asign)),
+                      const SizedBox(width: 10),
                       IconButton(
-                        icon:
-                            const Icon(Icons.photo_library, color: Colors.blue),
-                        onPressed: () => _viewPhotos(asign),
-                      ),
+                          icon: const Icon(Icons.photo_library,
+                              color: Colors.blue),
+                          onPressed: () => _viewPhotos(asign)),
                     ],
                   ),
                 ],
