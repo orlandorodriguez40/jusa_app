@@ -27,6 +27,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   final Map<String, int> _tiemposFotos = {};
   bool _cargandoTiempos = true;
 
+  // 🚨 REEMPLAZA ESTO CON TU CLAVE REAL DE GOOGLE MAPS
+  final String _googleMapsApiKey = "TU_API_KEY_AQUI";
+
   @override
   void initState() {
     super.initState();
@@ -62,22 +65,15 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   bool _puedeEliminar(dynamic foto) {
-    // Solo el nivel 3 (chofer) puede eliminar sus fotos recientes
-    if (widget.nivelId != 3 || _cargandoTiempos) {
-      return false;
-    }
+    if (widget.nivelId != 3 || _cargandoTiempos) return false;
 
     String id = foto['id'].toString();
     int? registro = _tiemposFotos[id];
-    if (registro == null) {
-      return false;
-    }
+    if (registro == null) return false;
 
     final String? fechaRaw =
         foto["created_at"] ?? foto["fecha"] ?? foto["updated_at"];
-    if (fechaRaw == null) {
-      return false;
-    }
+    if (fechaRaw == null) return false;
 
     try {
       List<String> partes = fechaRaw.split(RegExp(r'[/-]'));
@@ -107,9 +103,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$id");
       final response = await http.delete(url);
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         final prefs = await SharedPreferences.getInstance();
@@ -156,6 +150,15 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   Widget _buildHeaderAuditoria() {
+    // Intentamos obtener latitud y longitud de la asignación
+    final String? lat = widget.asignacion["latitud"]?.toString();
+    final String? lng = widget.asignacion["longitud"]?.toString();
+
+    // URL de Google Maps Static API
+    final String mapUrl = (lat != null && lng != null)
+        ? "https://maps.googleapis.com/maps/api/staticmap?center=$lat,$lng&zoom=15&size=600x300&markers=color:red|$lat,$lng&key=$_googleMapsApiKey"
+        : "";
+
     return Column(
       children: [
         Container(
@@ -164,9 +167,21 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           color: Colors.grey[300],
           child: Stack(
             children: [
-              const Center(
-                  child:
-                      Icon(Icons.map_outlined, size: 60, color: Colors.grey)),
+              // MUESTRA EL MAPA REAL O UN ICONO SI NO HAY COORDENADAS
+              Positioned.fill(
+                child: (mapUrl.isNotEmpty)
+                    ? Image.network(
+                        mapUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Center(
+                          child: Icon(Icons.map, size: 60, color: Colors.grey),
+                        ),
+                      )
+                    : const Center(
+                        child: Icon(Icons.map_outlined,
+                            size: 60, color: Colors.grey)),
+              ),
               Positioned(
                 bottom: 15,
                 left: 15,
@@ -178,7 +193,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                     border: Border.all(color: Colors.blue),
                   ),
                   child: Text(
-                    "📍 ${widget.asignacion["plaza"]}",
+                    "📍 ${widget.asignacion["plaza"] ?? 'Ubicación'}",
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 13),
                   ),
@@ -203,7 +218,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   const Icon(Icons.location_city,
                       color: Colors.indigo, size: 20),
                   const SizedBox(width: 8),
-                  Text("${widget.asignacion["ciudad"]}",
+                  Text("${widget.asignacion["ciudad"] ?? 'Sin ciudad'}",
                       style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.bold)),
                 ],
@@ -214,7 +229,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   const Icon(Icons.calendar_today,
                       color: Colors.grey, size: 18),
                   const SizedBox(width: 8),
-                  Text("Fecha: ${widget.asignacion["fecha"]}"),
+                  Text("Fecha: ${widget.asignacion["fecha"] ?? 'N/A'}"),
                   const SizedBox(width: 15),
                   const Icon(Icons.access_time, color: Colors.grey, size: 18),
                   const SizedBox(width: 8),
