@@ -12,6 +12,7 @@ class PhotoGalleryScreen extends StatefulWidget {
   final dynamic asignacion;
   final int nivelId;
 
+  // Base URL sin espacios accidentales
   static const String baseImageUrl =
       "https://sistema.jusaimpulsemkt.com/storage/";
 
@@ -43,9 +44,18 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   @override
   void initState() {
     super.initState();
+    // Clonamos la lista y nos aseguramos de que no sea nula
     fotos =
         widget.fotosServidor != null ? List.from(widget.fotosServidor!) : [];
     _inicializarPantalla();
+  }
+
+  // 🛡️ FUNCIÓN ESCUDO: Elimina espacios, saltos de línea y maneja nulos (Como en Windows)
+  String _limpiar(dynamic valor) {
+    if (valor == null) {
+      return "";
+    }
+    return valor.toString().trim().replaceAll(RegExp(r'[\n\r\t]'), '');
   }
 
   void _inicializarPantalla() {
@@ -53,7 +63,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       _procesarFotosIniciales();
       _inicializarPersistencia();
     } catch (e) {
-      debugPrint("Error en inicialización: $e");
+      debugPrint("Error crítico en inicialización: $e");
       if (mounted) {
         setState(() {
           _cargandoTiempos = false;
@@ -66,19 +76,20 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     try {
       if (fotos.isNotEmpty) {
         fotos.sort((a, b) {
-          int idA = int.tryParse(a['id']?.toString() ?? '0') ?? 0;
-          int idB = int.tryParse(b['id']?.toString() ?? '0') ?? 0;
+          int idA = int.tryParse(_limpiar(a['id'])) ?? 0;
+          int idB = int.tryParse(_limpiar(b['id'])) ?? 0;
           return idB.compareTo(idA);
         });
       }
 
-      double lat = double.tryParse(fotos.isNotEmpty
-              ? fotos[0]["latitud"]?.toString() ?? '0'
-              : widget.asignacion?["latitud"]?.toString() ?? '0') ??
+      // Limpieza de coordenadas antes del parseo
+      double lat = double.tryParse(_limpiar(fotos.isNotEmpty
+              ? fotos[0]["latitud"]
+              : widget.asignacion?["latitud"])) ??
           0.0;
-      double lng = double.tryParse(fotos.isNotEmpty
-              ? fotos[0]["longitud"]?.toString() ?? '0'
-              : widget.asignacion?["longitud"]?.toString() ?? '0') ??
+      double lng = double.tryParse(_limpiar(fotos.isNotEmpty
+              ? fotos[0]["longitud"]
+              : widget.asignacion?["longitud"])) ??
           0.0;
 
       _ubicacionInicial = LatLng(lat, lng);
@@ -89,8 +100,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           markerId: const MarkerId('punto_visita'),
           position: _ubicacionInicial,
           infoWindow: InfoWindow(
-            title:
-                widget.asignacion?["cliente"]?.toString() ?? "Punto de Visita",
+            title: _limpiar(widget.asignacion?["cliente"]).isEmpty
+                ? "Punto de Visita"
+                : _limpiar(widget.asignacion?["cliente"]),
             onTap: () {
               _abrirEnGoogleMaps(lat, lng);
             },
@@ -113,8 +125,8 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     });
 
     try {
-      final idAsig = widget.asignacion?["id"];
-      if (idAsig == null) {
+      final idAsig = _limpiar(widget.asignacion?["id"]);
+      if (idAsig.isEmpty) {
         return;
       }
 
@@ -134,8 +146,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("❌ No se pudo conectar con el servidor")),
+          const SnackBar(content: Text("❌ Error de sincronización")),
         );
       }
     } finally {
@@ -148,13 +159,15 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   Future<void> _obtenerDireccionEscrita(String lat, String lng) async {
-    if (lat == "0" || lat == "0.0") {
+    String cLat = _limpiar(lat);
+    String cLng = _limpiar(lng);
+    if (cLat == "0" || cLat == "0.0" || cLat.isEmpty) {
       return;
     }
 
     try {
       final url = Uri.parse(
-          "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$_googleMapsApiKey&region=ve");
+          "https://maps.googleapis.com/maps/api/geocode/json?latlng=$cLat,$cLng&key=$_googleMapsApiKey&region=ve");
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -175,7 +188,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       final ahora = DateTime.now().millisecondsSinceEpoch;
 
       for (var foto in fotos) {
-        String id = foto['id']?.toString() ?? '';
+        String id = _limpiar(foto['id']);
         if (id.isEmpty) {
           continue;
         }
@@ -223,15 +236,14 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       if (widget.nivelId != 3 || _cargandoTiempos) {
         return false;
       }
-      String id = foto['id']?.toString() ?? '';
+      String id = _limpiar(foto['id']);
       int? registro = _tiemposFotos[id];
       if (registro == null) {
         return false;
       }
 
-      final String? fechaRaw =
-          foto["fecha"]?.toString() ?? foto["created_at"]?.toString();
-      if (fechaRaw == null) {
+      final String fechaRaw = _limpiar(foto["fecha"] ?? foto["created_at"]);
+      if (fechaRaw.isEmpty) {
         return false;
       }
 
@@ -250,27 +262,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       return false;
     }
     return false;
-  }
-
-  Future<void> _eliminarFoto(int id, int index) async {
-    try {
-      final url = Uri.parse(
-          "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$id");
-      final response = await http.delete(url);
-
-      if (response.statusCode == 200 && mounted) {
-        setState(() {
-          fotos.removeAt(index);
-        });
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text("✅ Foto eliminada")));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text("❌ Error de red")));
-      }
-    }
   }
 
   @override
@@ -307,7 +298,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
             Padding(
               padding: const EdgeInsets.only(right: 12.0),
               child: Image.network(
-                iconUrl,
+                _limpiar(iconUrl),
                 width: 32,
                 height: 32,
                 errorBuilder: (context, error, stackTrace) {
@@ -343,27 +334,24 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     String rolTexto =
         widget.nivelId == 2 ? "VISTA SUPERVISOR" : "VISTA CLIENTE";
     String responsable =
-        widget.asignacion?["usuario"]?.toString() ?? "No identificado";
-
-    bool soportaMapa = Platform.isAndroid || Platform.isIOS;
+        _limpiar(widget.asignacion?["usuario"] ?? "No identificado");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (soportaMapa)
-          SizedBox(
-            height: 300,
-            child: GoogleMap(
-              initialCameraPosition:
-                  CameraPosition(target: _ubicacionInicial, zoom: 16.0),
-              markers: _markers,
-              onMapCreated: (controller) {
-                if (!_controller.isCompleted) {
-                  _controller.complete(controller);
-                }
-              },
-            ),
+        SizedBox(
+          height: 300,
+          child: GoogleMap(
+            initialCameraPosition:
+                CameraPosition(target: _ubicacionInicial, zoom: 16.0),
+            markers: _markers,
+            onMapCreated: (controller) {
+              if (!_controller.isCompleted) {
+                _controller.complete(controller);
+              }
+            },
           ),
+        ),
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -391,7 +379,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   color: Colors.redAccent),
               const Divider(height: 30),
               _headerRow(Icons.calendar_today,
-                  "Fecha: ${widget.asignacion?["fecha"]?.toString() ?? ''}"),
+                  "Fecha: ${_limpiar(widget.asignacion?["fecha"])}"),
             ],
           ),
         ),
@@ -428,7 +416,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       delegate: SliverChildBuilderDelegate(
         (context, index) {
           final f = fotos[index];
-          final String fotoPath = f["foto"]?.toString() ?? "";
+          final String fotoPath = _limpiar(f["foto"]);
           final String imageUrl = "${PhotoGalleryScreen.baseImageUrl}$fotoPath";
 
           return Card(
@@ -438,22 +426,22 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    cacheWidth: 400,
-                    errorBuilder: (c, e, s) {
-                      return const Center(
-                          child: Icon(Icons.broken_image, color: Colors.grey));
-                    },
-                    loadingBuilder: (c, child, progress) {
-                      if (progress == null) {
-                        return child;
-                      }
-                      return const Center(
-                          child: CircularProgressIndicator(strokeWidth: 2));
-                    },
-                  ),
+                  child: fotoPath.isEmpty
+                      ? const Center(child: Icon(Icons.image_not_supported))
+                      : Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          cacheWidth: 400,
+                          errorBuilder: (c, e, s) => const Center(
+                              child:
+                                  Icon(Icons.broken_image, color: Colors.grey)),
+                          loadingBuilder: (c, child, progress) {
+                            if (progress == null) return child;
+                            return const Center(
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2));
+                          },
+                        ),
                 ),
                 if (_puedeEliminar(f))
                   Positioned(
@@ -467,7 +455,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                             color: Colors.red, size: 18),
                         onPressed: () {
                           _confirmarEliminacion(
-                              int.parse(f["id"].toString()), index);
+                              int.tryParse(_limpiar(f["id"])) ?? 0, index);
                         },
                       ),
                     ),
@@ -482,28 +470,43 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   void _confirmarEliminacion(int id, int index) {
+    if (id == 0) return;
     showDialog(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text("¿Eliminar foto?"),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-              },
-              child: const Text("NO"),
-            ),
-            TextButton(
+      builder: (ctx) => AlertDialog(
+        title: const Text("¿Eliminar foto?"),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text("NO")),
+          TextButton(
               onPressed: () {
                 Navigator.pop(ctx);
                 _eliminarFoto(id, index);
               },
-              child: const Text("SÍ"),
-            ),
-          ],
-        );
-      },
+              child: const Text("SÍ")),
+        ],
+      ),
     );
+  }
+
+  Future<void> _eliminarFoto(int id, int index) async {
+    try {
+      final url = Uri.parse(
+          "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$id");
+      final response = await http.delete(url);
+
+      if (response.statusCode == 200 && mounted) {
+        setState(() {
+          fotos.removeAt(index);
+        });
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text("✅ Foto eliminada")));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text("❌ Error al eliminar")));
+      }
+    }
   }
 }
