@@ -316,6 +316,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     String responsableNombre =
         widget.asignacion["usuario"] ?? "No identificado";
 
+    double lat = _ubicacionInicial.latitude;
+    double lng = _ubicacionInicial.longitude;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -367,6 +370,26 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                 _direccionEscrita,
                 color: Colors.redAccent,
               ),
+
+              // BOTÓN IR AL MAPA
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _abrirEnGoogleMaps(lat, lng),
+                  icon: const Icon(Icons.directions, color: Colors.white),
+                  label: const Text("IR AL MAPA / GPS",
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF424949),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+
               const Divider(height: 30),
               _headerRow(
                 Icons.calendar_today_rounded,
