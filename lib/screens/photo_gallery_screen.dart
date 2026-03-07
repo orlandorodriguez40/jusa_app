@@ -346,7 +346,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  // ✅ USO DE WITHVALUES PARA EVITAR DEPRECACIÓN
+                  // ✅ REEMPLAZADO withOpacity POR withValues
                   color: rolColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: rolColor.withValues(alpha: 0.5)),
