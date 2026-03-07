@@ -184,7 +184,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         }
       }
     } catch (e) {
-      debugPrint("Error: $e");
+      debugPrint("Error launching maps: $e");
     }
   }
 
@@ -249,6 +249,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   @override
   Widget build(BuildContext context) {
     final bool esAuditoria = (widget.nivelId == 2 || widget.nivelId == 4);
+
     String? iconUrl;
     if (widget.nivelId == 2) {
       iconUrl =
@@ -274,15 +275,18 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                         color: Colors.white, strokeWidth: 2))
                 : const Icon(Icons.refresh),
             onPressed: _refrescarGaleria,
-            tooltip: "Actualizar fotos",
           ),
           if (iconUrl != null)
             Padding(
               padding: const EdgeInsets.only(right: 12.0),
-              child: Image.network(iconUrl, width: 32, height: 32,
-                  errorBuilder: (context, error, stackTrace) {
-                return const Icon(Icons.account_circle, color: Colors.white);
-              }),
+              child: Image.network(
+                iconUrl,
+                width: 32,
+                height: 32,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(Icons.account_circle, color: Colors.white);
+                },
+              ),
             ),
         ],
       ),
@@ -294,9 +298,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   SliverToBoxAdapter(child: _buildMapaInteractivoHeader()),
                 if (fotos.isEmpty)
                   SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: _buildEmptyState(),
-                  )
+                      hasScrollBody: false, child: _buildEmptyState())
                 else
                   SliverPadding(
                     padding: const EdgeInsets.all(12),
@@ -317,20 +319,13 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
+        SizedBox(
           height: 300,
-          width: double.infinity,
-          decoration: BoxDecoration(
-              border: Border(
-                  bottom: BorderSide(color: Colors.grey[300]!, width: 1))),
           child: GoogleMap(
-            mapType: MapType.normal,
             initialCameraPosition:
                 CameraPosition(target: _ubicacionInicial, zoom: 17.5),
             markers: _markers,
-            zoomControlsEnabled: true,
-            myLocationButtonEnabled: false,
-            onMapCreated: (GoogleMapController controller) {
+            onMapCreated: (controller) {
               if (!_controller.isCompleted) {
                 _controller.complete(controller);
               }
@@ -346,28 +341,41 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  // ✅ REEMPLAZADO withOpacity POR withValues
-                  color: rolColor.withValues(alpha: 0.1),
+                  // ignore: deprecated_member_use
+                  color: rolColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: rolColor.withValues(alpha: 0.5)),
+                  // ignore: deprecated_member_use
+                  border: Border.all(color: rolColor.withOpacity(0.5)),
                 ),
-                child: Text(rolTexto,
-                    style: TextStyle(
-                        color: rolColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold)),
+                child: Text(
+                  rolTexto,
+                  style: TextStyle(
+                    color: rolColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
-              _headerRow(Icons.person_pin_circle_rounded,
-                  "Responsable: $responsableNombre",
-                  bold: true),
-              _headerRow(Icons.pin_drop_rounded, _direccionEscrita,
-                  color: Colors.redAccent),
+              _headerRow(
+                Icons.person_pin_circle_rounded,
+                "Responsable: $responsableNombre",
+                bold: true,
+              ),
+              _headerRow(
+                Icons.pin_drop_rounded,
+                _direccionEscrita,
+                color: Colors.redAccent,
+              ),
               const Divider(height: 30),
-              _headerRow(Icons.calendar_today_rounded,
-                  "Fecha: ${widget.asignacion["fecha"]}"),
-              _headerRow(Icons.access_time_rounded,
-                  "Hora: ${widget.asignacion["hora"] ?? 'N/A'}"),
+              _headerRow(
+                Icons.calendar_today_rounded,
+                "Fecha: ${widget.asignacion["fecha"]}",
+              ),
+              _headerRow(
+                Icons.access_time_rounded,
+                "Hora: ${widget.asignacion["hora"] ?? 'N/A'}",
+              ),
             ],
           ),
         ),
@@ -386,12 +394,15 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           Icon(icon, size: 18, color: color ?? Colors.grey[700]),
           const SizedBox(width: 12),
           Expanded(
-              child: Text(text,
-                  style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[800],
-                      height: 1.3,
-                      fontWeight: bold ? FontWeight.bold : FontWeight.normal))),
+            child: Text(
+              text,
+              style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[800],
+                  height: 1.3,
+                  fontWeight: bold ? FontWeight.bold : FontWeight.normal),
+            ),
+          ),
         ],
       ),
     );
@@ -423,25 +434,32 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                     child: Stack(
                       children: [
                         Positioned.fill(
-                            child: Image.network(imageUrl, fit: BoxFit.cover,
-                                errorBuilder: (c, e, s) {
-                          return const Icon(Icons.broken_image);
-                        })),
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) {
+                              return const Icon(Icons.broken_image);
+                            },
+                          ),
+                        ),
                         if (permiteEliminar)
                           Positioned(
-                              right: 5,
-                              top: 5,
-                              child: GestureDetector(
-                                  onTap: () {
-                                    _confirmarEliminacion(f["id"], index);
-                                  },
-                                  child: Container(
-                                      padding: const EdgeInsets.all(6),
-                                      decoration: const BoxDecoration(
-                                          color: Colors.white,
-                                          shape: BoxShape.circle),
-                                      child: const Icon(Icons.delete_forever,
-                                          color: Colors.red, size: 20)))),
+                            right: 5,
+                            top: 5,
+                            child: GestureDetector(
+                              onTap: () {
+                                _confirmarEliminacion(f["id"], index);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle),
+                                child: const Icon(Icons.delete_forever,
+                                    color: Colors.red, size: 20),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -462,24 +480,28 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
 
   void _confirmarEliminacion(int id, int index) {
     showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-                title: const Text("¿Eliminar foto?"),
-                content: const Text("Esta acción no se puede deshacer."),
-                actions: [
-                  TextButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                      },
-                      child: const Text("CANCELAR")),
-                  TextButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        eliminarFoto(id, index);
-                      },
-                      child: const Text("SÍ, ELIMINAR",
-                          style: TextStyle(color: Colors.red))),
-                ]));
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("¿Eliminar foto?"),
+        content: const Text("Esta acción no se puede deshacer."),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+            },
+            child: const Text("CANCELAR"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              eliminarFoto(id, index);
+            },
+            child:
+                const Text("SÍ, ELIMINAR", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEmptyState() {
