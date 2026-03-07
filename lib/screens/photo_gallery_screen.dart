@@ -373,10 +373,11 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  // ⚡️ CAMBIO AQUÍ: withValues en lugar de withOpacity
-                  color: rolColor.withValues(alpha: 0.1),
+                  // ignore: deprecated_member_use
+                  color: rolColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: rolColor.withValues(alpha: 0.5)),
+                  // ignore: deprecated_member_use
+                  border: Border.all(color: rolColor.withOpacity(0.5)),
                 ),
                 child: Text(rolTexto,
                     style: TextStyle(
