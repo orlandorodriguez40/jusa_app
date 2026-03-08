@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -26,7 +25,6 @@ class PhotoGalleryScreen extends StatefulWidget {
 
 class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   late List<dynamic> fotos;
-  final Map<String, int> _tiemposFotos = {};
   bool _cargandoTiempos = true;
   bool _actualizando = false;
   String _direccionEscrita = "Buscando dirección física...";
@@ -54,15 +52,11 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   void _inicializarPantalla() {
-    try {
-      _procesarFotosIniciales();
-      _inicializarPersistencia();
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _cargandoTiempos = false;
-        });
-      }
+    _procesarFotosIniciales();
+    if (mounted) {
+      setState(() {
+        _cargandoTiempos = false;
+      });
     }
   }
 
@@ -100,6 +94,76 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     }
   }
 
+  bool _puedeEliminar(dynamic createdAt) {
+    if (widget.nivelId != 3 || createdAt == null) {
+      return false;
+    }
+    try {
+      DateTime fechaFoto = DateTime.parse(createdAt.toString());
+      DateTime ahora = DateTime.now();
+      return ahora.difference(fechaFoto).inMinutes < 5;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _eliminarFoto(dynamic fotoId) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("¿Eliminar fotografía?"),
+        content: const Text(
+            "Esta acción borrará la imagen permanentemente del sistema."),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context, false);
+            },
+            child: const Text("CANCELAR"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context, true);
+            },
+            child: const Text("ELIMINAR",
+                style:
+                    TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      setState(() {
+        _actualizando = true;
+      });
+      try {
+        final response = await http.post(
+          Uri.parse("https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app"),
+          body: {"foto_id": fotoId.toString()},
+        );
+        if (response.statusCode == 200) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text("✅ Foto eliminada correctamente")));
+          }
+          _refrescarGaleria();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("❌ Error al eliminar")));
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _actualizando = false;
+          });
+        }
+      }
+    }
+  }
+
   Future<void> _obtenerDireccionEscrita(String lat, String lng) async {
     try {
       final url = Uri.parse(
@@ -114,28 +178,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         }
       }
     } catch (e) {
-      debugPrint(e.toString());
-    }
-  }
-
-  Future<void> _inicializarPersistencia() async {
-    final prefs = await SharedPreferences.getInstance();
-    final ahora = DateTime.now().millisecondsSinceEpoch;
-    for (var f in fotos) {
-      String id = _limpiar(f['id']);
-      if (id.isEmpty) {
-        continue;
-      }
-      String key = "ts_foto_$id";
-      if (!prefs.containsKey(key)) {
-        await prefs.setInt(key, ahora);
-      }
-      _tiemposFotos[id] = prefs.getInt(key) ?? ahora;
-    }
-    if (mounted) {
-      setState(() {
-        _cargandoTiempos = false;
-      });
+      debugPrint("Geocoding Error: $e");
     }
   }
 
@@ -163,7 +206,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         }
       }
     } catch (e) {
-      debugPrint(e.toString());
+      debugPrint("Refresh Error: $e");
     } finally {
       if (mounted) {
         setState(() {
@@ -225,7 +268,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           width: double.infinity,
           padding: const EdgeInsets.all(12),
           color: Colors.grey[200],
-          child: const Text("UBICACIÓN DEL CHOFER",
+          child: const Text("UBICACIÓN DEL REGISTRO",
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
         ),
         SizedBox(
@@ -264,13 +307,43 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10),
       delegate: SliverChildBuilderDelegate((context, index) {
         final f = fotos[index];
+        final bool puedeBorrar = _puedeEliminar(f["created_at"]);
+
         return Card(
           clipBehavior: Clip.antiAlias,
-          child: Image.network(
-              "${PhotoGalleryScreen.baseImageUrl}${_limpiar(f["foto"])}",
-              fit: BoxFit.cover, errorBuilder: (c, e, s) {
-            return const Icon(Icons.broken_image);
-          }),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.network(
+                "${PhotoGalleryScreen.baseImageUrl}${_limpiar(f["foto"])}",
+                fit: BoxFit.cover,
+                errorBuilder: (c, e, s) {
+                  return const Icon(Icons.broken_image);
+                },
+              ),
+              if (puedeBorrar)
+                Positioned(
+                  top: 5,
+                  right: 5,
+                  child: GestureDetector(
+                    onTap: () {
+                      _eliminarFoto(f["id"]);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        // ✅ CORRECCIÓN: Usando withValues para evitar deprecación
+                        color: Colors.red.withValues(alpha: 0.8),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.delete_forever,
+                          color: Colors.white, size: 20),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       }, childCount: fotos.length),
     );

@@ -272,7 +272,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
           ),
-          // ✅ CORREGIDO: Sin llaves directas para evitar el error de Set<Container>
           if (_sendingPhoto)
             Container(
                 color: Colors.black26,
@@ -302,6 +301,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         itemCount: _asignaciones.length,
         itemBuilder: (context, index) {
           final asign = _asignaciones[index];
+
+          // ✅ MEJORA: Lógica robusta para evitar el S/D si hay datos en cualquier campo de texto
+          final String ubicacionFinal = asign["municipio"] ??
+              asign["ubicación"] ??
+              asign["ubicacion"] ??
+              asign["sucursal"] ??
+              asign["plaza"] ??
+              asign["direccion"] ??
+              "S/D";
+
           return Card(
             margin: const EdgeInsets.symmetric(vertical: 8),
             elevation: 3,
@@ -320,8 +329,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _infoRow("Cliente:", asign["cliente"]),
                         _infoRow("Plaza:",
                             asign["plaza"] ?? asign["sucursal"] ?? "N/A"),
-                        _infoRow("Ubicación:",
-                            asign["municipio"] ?? asign["ubicacion"] ?? "S/D"),
+                        // ✅ Usamos la variable inteligente aquí
+                        _infoRow("Ubicación:", ubicacionFinal),
                         _infoRow("Estatus:", asign["estatus"], highlight: true),
                       ],
                     ),
@@ -329,7 +338,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // ✅ CORREGIDO: Uso de spread operator ...[ ] para condicionales en listas
                       if (widget.nivelId == 3) ...[
                         IconButton(
                           icon: const Icon(Icons.camera_alt,
