@@ -49,25 +49,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _fetchAsignaciones();
   }
 
-  String _obtenerEtiquetaNivel(int nivelId) {
-    switch (nivelId) {
-      case 2:
-        return "SUPERVISOR";
-      case 3:
-        return "CHOFER";
-      case 4:
-        return "CLIENTE";
-      default:
-        return "USUARIO";
+  String _obtenerTituloEncabezado() {
+    if (widget.nivelId == 3) {
+      return "TOMAR FOTOS";
+    } else {
+      return "REPORTE FOTOGRÁFICO";
     }
   }
+
+  // --- LÓGICA DE GEOLOCALIZACIÓN Y FOTOS ---
 
   Future<Position> _determinePosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       return Future.error('El GPS está desactivado.');
     }
-
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -103,26 +99,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return markedFile;
   }
 
-  void _abrirPerfil() async {
-    await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PerfilScreen(
-            usuario: _userData,
-            onPerfilActualizado: (datosNuevos) {
-              if (mounted) {
-                setState(() => _userData = datosNuevos);
-              }
-            },
-          ),
-        ));
-  }
+  // --- PETICIONES API ---
 
   Future<void> _fetchAsignaciones() async {
     if (!mounted) {
       return;
     }
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+    });
 
     String apiUrl = "";
     if (widget.nivelId == 2) {
@@ -137,11 +122,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     try {
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: const {"Accept": "application/json"},
-      ).timeout(const Duration(seconds: 15));
-
+      final response = await http.get(Uri.parse(apiUrl), headers: const {
+        "Accept": "application/json"
+      }).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (mounted) {
@@ -154,7 +137,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       debugPrint("Error Fetch Dashboard: $e");
     } finally {
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+        });
       }
     }
   }
@@ -178,13 +163,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    setState(() => _sendingPhoto = true);
+    setState(() {
+      _sendingPhoto = true;
+    });
 
     try {
       File markedFile = await _addWatermark(File(photo.path), currentPosition);
       final request = http.MultipartRequest('POST',
           Uri.parse("https://sistema.jusaimpulsemkt.com/api/tomar-foto-app"));
-
       request.fields['asignacion_id'] = asignacion["id"].toString();
       request.fields['latitud'] = currentPosition.latitude.toString();
       request.fields['longitud'] = currentPosition.longitude.toString();
@@ -204,7 +190,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _sendingPhoto = false);
+        setState(() {
+          _sendingPhoto = false;
+        });
       }
     }
   }
@@ -232,45 +220,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  void _abrirPerfil() async {
+    await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (context) => PerfilScreen(
+                  usuario: _userData,
+                  onPerfilActualizado: (datosNuevos) {
+                    if (mounted) {
+                      setState(() {
+                        _userData = datosNuevos;
+                      });
+                    }
+                  },
+                )));
+  }
+
+  // --- INTERFAZ ---
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: const Color(0xFF424949),
         centerTitle: true,
-        title: Text(
-          "PANEL ${_obtenerEtiquetaNivel(widget.nivelId)}",
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text(_obtenerTituloEncabezado(),
+            style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white)),
       ),
       body: Stack(
         children: [
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  GestureDetector(
-                    onTap: _abrirPerfil,
-                    child: Image.asset("assets/images/logo-jusa-2-opt.png",
-                        height: 70),
-                  ),
-                  const SizedBox(height: 10),
-                  Text("Bienvenido: ${widget.userName}",
-                      style: const TextStyle(
-                          color: Colors.blueGrey, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 20),
-                  Expanded(child: _buildMainContent()),
-                ],
-              ),
+            child: Column(
+              children: [
+                const SizedBox(height: 15),
+                GestureDetector(
+                  onTap: _abrirPerfil,
+                  child: Image.asset("assets/images/logo-jusa-2-opt.png",
+                      height: 60),
+                ),
+                const SizedBox(height: 10),
+                Text("Bienvenido: ${widget.userName}",
+                    style: const TextStyle(
+                        color: Colors.blueGrey, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 15),
+                Expanded(child: _buildMainContent()),
+              ],
             ),
           ),
+          // ✅ CORREGIDO: Sin llaves directas para evitar el error de Set<Container>
           if (_sendingPhoto)
             Container(
-              color: Colors.black26,
-              child: const Center(child: CircularProgressIndicator()),
-            ),
+                color: Colors.black26,
+                child: const Center(child: CircularProgressIndicator())),
         ],
       ),
     );
@@ -280,70 +286,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-
     if (_asignaciones.isEmpty) {
       return RefreshIndicator(
-        onRefresh: _fetchAsignaciones,
-        child: ListView(
-          children: [
-            SizedBox(height: MediaQuery.of(context).size.height * 0.2),
-            const Icon(Icons.assignment_late_outlined,
-                size: 80, color: Colors.grey),
-            const SizedBox(height: 20),
-            const Center(
-              child: Text(
-                "NO HAY ASIGNACIONES",
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blueGrey),
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Center(
-                child: Text("Desliza hacia abajo para actualizar",
-                    style: TextStyle(color: Colors.grey))),
-          ],
-        ),
-      );
+          onRefresh: _fetchAsignaciones,
+          child: ListView(children: const [
+            SizedBox(height: 50),
+            Center(child: Text("NO HAY ASIGNACIONES"))
+          ]));
     }
 
     return RefreshIndicator(
       onRefresh: _fetchAsignaciones,
       child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         itemCount: _asignaciones.length,
         itemBuilder: (context, index) {
           final asign = _asignaciones[index];
           return Card(
             margin: const EdgeInsets.symmetric(vertical: 8),
-            elevation: 2,
+            elevation: 3,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.all(15),
+              child: Row(
                 children: [
-                  Text("Fecha: ${asign["fecha"]}",
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text("Cliente: ${asign["cliente"]}"),
-                  Text("Estatus: ${asign["estatus"]}"),
-                  const Divider(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _infoRow("Fecha:", asign["fecha"]),
+                        _infoRow("Hora:", asign["hora"] ?? "S/H"),
+                        _infoRow("Cliente:", asign["cliente"]),
+                        _infoRow("Plaza:",
+                            asign["plaza"] ?? asign["sucursal"] ?? "N/A"),
+                        _infoRow("Ubicación:",
+                            asign["municipio"] ?? asign["ubicacion"] ?? "S/D"),
+                        _infoRow("Estatus:", asign["estatus"], highlight: true),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // 📸 El icono de cámara solo se muestra para Nivel 3 (Chofer)
+                      // ✅ CORREGIDO: Uso de spread operator ...[ ] para condicionales en listas
                       if (widget.nivelId == 3) ...[
                         IconButton(
-                          icon:
-                              const Icon(Icons.camera_alt, color: Colors.green),
+                          icon: const Icon(Icons.camera_alt,
+                              color: Colors.green, size: 30),
                           onPressed: () => _takePhoto(asign),
                         ),
-                        const SizedBox(width: 10),
                       ],
-                      // 🖼️ El icono de galería está disponible para todos
                       IconButton(
-                        icon:
-                            const Icon(Icons.photo_library, color: Colors.blue),
+                        icon: const Icon(Icons.photo_library,
+                            color: Colors.blue, size: 30),
                         onPressed: () => _viewPhotos(asign),
                       ),
                     ],
@@ -353,6 +349,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, dynamic value, {bool highlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(color: Colors.black, fontSize: 13),
+          children: [
+            TextSpan(
+                text: "$label ",
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            TextSpan(
+              text: "${value ?? 'N/A'}",
+              style: TextStyle(
+                fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
+                color: highlight ? Colors.blueGrey : Colors.black87,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
