@@ -107,7 +107,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     }
   }
 
-  // ✅ NUEVA FUNCIÓN: Ver foto con ZOOM
+  // ✅ ZOOM: Ver foto grande con InteractiveViewer
   void _verFotoGrande(String url) {
     showDialog(
       context: context,
@@ -293,8 +293,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           child: esWindows
               ? Container(
                   color: Colors.grey[300],
-                  child: const Center(
-                      child: Text("Mapa no disponible en Windows")))
+                  child: const Center(child: Text("Mapa no disponible")))
               : GoogleMap(
                   initialCameraPosition:
                       CameraPosition(target: _ubicacionInicial, zoom: 15.0),
@@ -324,7 +323,11 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   Widget _buildGridSliver() {
     return SliverGrid(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10),
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 0.70, // Espacio para la foto y el botón debajo
+      ),
       delegate: SliverChildBuilderDelegate((context, index) {
         final f = fotos[index];
         final String urlCompleta =
@@ -335,42 +338,52 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           clipBehavior: Clip.antiAlias,
           elevation: 3,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          child: Stack(
-            fit: StackFit.expand,
+          color: const Color(0xFFF4F6F6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ✅ GESTO: Tocar para ver con Zoom
-              GestureDetector(
-                onTap: () => _verFotoGrande(urlCompleta),
-                child: Image.network(
-                  urlCompleta,
-                  fit: BoxFit.cover,
-                  errorBuilder: (c, e, s) => const Icon(Icons.broken_image),
-                ),
-              ),
-              if (puedeBorrar)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: () => _eliminarFoto(f["id"]),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        // ignore: deprecated_member_use
-                        color: Colors.red.withOpacity(0.9),
-                        shape: BoxShape.circle,
-                        boxShadow: const [
-                          BoxShadow(
-                              color: Colors.black26,
-                              blurRadius: 4,
-                              offset: Offset(0, 2))
-                        ],
-                      ),
-                      child: const Icon(Icons.delete_forever,
-                          color: Colors.white, size: 24),
+              // 1. Imagen con Zoom (BoxFit.contain para no aplastarla)
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _verFotoGrande(urlCompleta),
+                  child: Container(
+                    color: Colors.white,
+                    child: Image.network(
+                      urlCompleta,
+                      fit: BoxFit.contain,
+                      errorBuilder: (c, e, s) => const Icon(Icons.broken_image,
+                          color: Colors.grey, size: 40),
                     ),
                   ),
                 ),
+              ),
+              // 2. Botón Verde de Eliminar
+              Container(
+                height: 52,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+                alignment: Alignment.center,
+                child: puedeBorrar
+                    ? ElevatedButton.icon(
+                        onPressed: () => _eliminarFoto(f["id"]),
+                        icon: const Icon(Icons.delete,
+                            color: Colors.white, size: 16),
+                        label: const Text("ELIMINAR",
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          elevation: 2,
+                          minimumSize: const Size(double.infinity, 38),
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6)),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ],
           ),
         );
