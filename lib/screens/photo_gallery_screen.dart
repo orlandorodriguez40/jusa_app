@@ -87,17 +87,61 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         Marker(markerId: const MarkerId('punto'), position: _ubicacionInicial));
   }
 
+  // ✅ VALIDACIÓN: Solo nivel_id 3 (Chofer) y menos de 5 minutos
   bool _puedeEliminar(dynamic createdAt) {
-    if (widget.nivelId != 3 || createdAt == null) {
+    final String nivelActual = _limpiar(widget.nivelId);
+
+    if (nivelActual != "3" || createdAt == null) {
       return false;
     }
+
     try {
-      DateTime fechaFoto = DateTime.parse(createdAt.toString());
+      DateTime fechaFoto = DateTime.parse(createdAt.toString()).toLocal();
       DateTime ahora = DateTime.now();
-      return ahora.difference(fechaFoto).inMinutes < 5;
+      int diferenciaMinutos = ahora.difference(fechaFoto).inMinutes;
+
+      return diferenciaMinutos >= 0 && diferenciaMinutos < 5;
     } catch (e) {
+      debugPrint("Error parseando fecha: $e");
       return false;
     }
+  }
+
+  // ✅ NUEVA FUNCIÓN: Ver foto con ZOOM
+  void _verFotoGrande(String url) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                clipBehavior: Clip.none,
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const CircularProgressIndicator(color: Colors.white);
+                  },
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _eliminarFoto(dynamic fotoId) async {
@@ -283,35 +327,47 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10),
       delegate: SliverChildBuilderDelegate((context, index) {
         final f = fotos[index];
+        final String urlCompleta =
+            "${PhotoGalleryScreen.baseImageUrl}${_limpiar(f["foto"])}";
         final bool puedeBorrar = _puedeEliminar(f["created_at"]);
 
         return Card(
           clipBehavior: Clip.antiAlias,
+          elevation: 3,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image.network(
-                "${PhotoGalleryScreen.baseImageUrl}${_limpiar(f["foto"])}",
-                fit: BoxFit.cover,
-                errorBuilder: (c, e, s) => const Icon(Icons.broken_image),
+              // ✅ GESTO: Tocar para ver con Zoom
+              GestureDetector(
+                onTap: () => _verFotoGrande(urlCompleta),
+                child: Image.network(
+                  urlCompleta,
+                  fit: BoxFit.cover,
+                  errorBuilder: (c, e, s) => const Icon(Icons.broken_image),
+                ),
               ),
               if (puedeBorrar)
                 Positioned(
-                  top: 5,
-                  right: 5,
+                  top: 8,
+                  right: 8,
                   child: GestureDetector(
                     onTap: () => _eliminarFoto(f["id"]),
                     child: Container(
-                      padding: const EdgeInsets.all(5),
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        // ✅ COMPATIBILIDAD: Usamos withOpacity para Flutter 3.22.0
                         // ignore: deprecated_member_use
-                        color: Colors.red.withOpacity(0.8),
+                        color: Colors.red.withOpacity(0.9),
                         shape: BoxShape.circle,
+                        boxShadow: const [
+                          BoxShadow(
+                              color: Colors.black26,
+                              blurRadius: 4,
+                              offset: Offset(0, 2))
+                        ],
                       ),
                       child: const Icon(Icons.delete_forever,
-                          color: Colors.white, size: 20),
+                          color: Colors.white, size: 24),
                     ),
                   ),
                 ),
