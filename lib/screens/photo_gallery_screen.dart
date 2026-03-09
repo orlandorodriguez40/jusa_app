@@ -305,8 +305,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(5),
                       decoration: BoxDecoration(
-                        // ✅ CORRECCIÓN: Uso de .withValues en lugar de withOpacity
-                        color: Colors.red.withValues(alpha: 0.8),
+                        // ✅ COMPATIBILIDAD: Usamos withOpacity para Flutter 3.22.0
+                        // ignore: deprecated_member_use
+                        color: Colors.red.withOpacity(0.8),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.delete_forever,
@@ -320,4 +321,4 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       }, childCount: fotos.length),
     );
   }
-}//photo_gallery_screen.dart//
+}
