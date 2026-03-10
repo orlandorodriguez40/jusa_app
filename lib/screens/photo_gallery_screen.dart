@@ -89,14 +89,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         Marker(markerId: const MarkerId('punto'), position: _ubicacionInicial));
   }
 
-  // ✅ MODIFICACIÓN: Se eliminó el desfase de tiempo para pruebas.
-  // El botón aparecerá siempre que el nivel sea 3.
   bool _puedeEliminar() {
     final String nivelActual = _limpiar(widget.nivelId);
-    if (nivelActual == "3") {
-      return true;
-    }
-    return false;
+    return nivelActual == "3";
   }
 
   void _verFotoGrande(String url) {
@@ -108,9 +103,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           children: [
             Center(
               child: InteractiveViewer(
-                clipBehavior: Clip.none,
-                minScale: 0.5,
-                maxScale: 4.0,
                 child: Image.network(
                   url,
                   fit: BoxFit.contain,
@@ -118,7 +110,8 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                     if (loadingProgress == null) {
                       return child;
                     }
-                    return const CircularProgressIndicator(color: Colors.white);
+                    return const Center(
+                        child: CircularProgressIndicator(color: Colors.white));
                   },
                 ),
               ),
@@ -145,9 +138,8 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         content: const Text("Esta acción borrará la imagen permanentemente."),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("CANCELAR"),
-          ),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("CANCELAR")),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text("ELIMINAR",
@@ -161,14 +153,29 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     if (confirmar == true) {
       setState(() => _actualizando = true);
       try {
-        final response = await http.post(
-          Uri.parse("https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app"),
-          body: {"foto_id": fotoId.toString()},
-        );
+        final String idLimpio = _limpiar(fotoId);
+        final String urlFinal =
+            "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$idLimpio";
+
+        // Intentamos DELETE. Si falla con 405, probamos GET.
+        var response = await http
+            .delete(Uri.parse(urlFinal))
+            .timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 405) {
+          response = await http
+              .get(Uri.parse(urlFinal))
+              .timeout(const Duration(seconds: 15));
+        }
+
         if (response.statusCode == 200 && mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(const SnackBar(content: Text("✅ Foto eliminada")));
-          _refrescarGaleria();
+          await _refrescarGaleria();
+        } else {
+          if (mounted) {
+            _mostrarErrorServidor(response.statusCode, response.body);
+          }
         }
       } catch (e) {
         if (mounted) {
@@ -183,6 +190,22 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     }
   }
 
+  void _mostrarErrorServidor(int code, String body) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Error $code"),
+        content: const Text(
+            "El servidor rechazó la operación. Verifique la ruta en el backend."),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("CERRAR"))
+        ],
+      ),
+    );
+  }
+
   Future<void> _refrescarGaleria() async {
     if (_actualizando) {
       return;
@@ -190,10 +213,8 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     setState(() => _actualizando = true);
     try {
       final idAsig = _limpiar(widget.asignacion?["id"]);
-      final response = await http
-          .get(Uri.parse(
-              "https://sistema.jusaimpulsemkt.com/api/fotos-asignacion-app/$idAsig"))
-          .timeout(const Duration(seconds: 10));
+      final response = await http.get(Uri.parse(
+          "https://sistema.jusaimpulsemkt.com/api/fotos-asignacion-app/$idAsig"));
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body);
         List<dynamic> nuevasFotos =
@@ -205,8 +226,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           });
         }
       }
-    } catch (e) {
-      debugPrint("Refresh Error: $e");
     } finally {
       if (mounted) {
         setState(() => _actualizando = false);
@@ -228,7 +247,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         }
       }
     } catch (e) {
-      debugPrint("Geocoding Error: $e");
+      debugPrint(e.toString());
     }
   }
 
@@ -294,8 +313,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                     color: Colors.grey[300],
                     child: const Center(child: Text("Mapa no disponible")))
                 : GoogleMap(
-                    initialCameraPosition:
-                        CameraPosition(target: _ubicacionInicial, zoom: 15.0),
+                    initialCameraPosition: CameraPosition(
+                        target: _ubicacionInicial,
+                        zoom: 15.0), // ✅ Corregido aquí
                     markers: _markers,
                     onMapCreated: (c) {
                       if (!_controller.isCompleted) {
@@ -325,22 +345,18 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           childAspectRatio: 0.70),
       delegate: SliverChildBuilderDelegate((context, index) {
         final f = fotos[index];
-        final String urlCompleta =
-            "${PhotoGalleryScreen.baseImageUrl}${_limpiar(f["foto"])}";
-
+        final url = "${PhotoGalleryScreen.baseImageUrl}${_limpiar(f["foto"])}";
         final bool puedeBorrar = _puedeEliminar();
 
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Imagen Natural Rectangular
             Expanded(
               child: GestureDetector(
-                onTap: () => _verFotoGrande(urlCompleta),
+                onTap: () => _verFotoGrande(url),
                 child: Container(
                   color: const Color(0xFFF2F4F4),
                   child: Image.network(
-                    urlCompleta,
+                    url,
                     fit: BoxFit.contain,
                     errorBuilder: (c, e, s) => const Icon(Icons.broken_image,
                         color: Colors.grey, size: 30),
@@ -348,11 +364,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                 ),
               ),
             ),
-            // Espacio para el botón de eliminar debajo
             Container(
               height: 50,
               padding: const EdgeInsets.only(top: 8.0),
-              alignment: Alignment.center,
               child: puedeBorrar
                   ? SizedBox(
                       width: double.infinity,
@@ -362,7 +376,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                           backgroundColor: Colors.green,
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          shadowColor: Colors.transparent,
                           shape: const StadiumBorder(),
                         ),
                         child: const Text("ELIMINAR",
