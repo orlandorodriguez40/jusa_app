@@ -89,20 +89,14 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         Marker(markerId: const MarkerId('punto'), position: _ubicacionInicial));
   }
 
-  bool _puedeEliminar(dynamic createdAt) {
+  // ✅ MODIFICACIÓN: Se eliminó el desfase de tiempo para pruebas.
+  // El botón aparecerá siempre que el nivel sea 3.
+  bool _puedeEliminar() {
     final String nivelActual = _limpiar(widget.nivelId);
-    if (nivelActual != "3" || createdAt == null) {
-      return false;
+    if (nivelActual == "3") {
+      return true;
     }
-
-    try {
-      DateTime fechaFoto = DateTime.parse(createdAt.toString()).toUtc();
-      DateTime ahora = DateTime.now().toUtc();
-      int diferenciaMinutos = ahora.difference(fechaFoto).inMinutes.abs();
-      return diferenciaMinutos < 10;
-    } catch (e) {
-      return false;
-    }
+    return false;
   }
 
   void _verFotoGrande(String url) {
@@ -316,7 +310,8 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
               Expanded(
                   child: Text(_direccionEscrita,
                       style: const TextStyle(fontSize: 12)))
-            ]))
+            ])),
+        const Divider(height: 1),
       ],
     );
   }
@@ -332,11 +327,13 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         final f = fotos[index];
         final String urlCompleta =
             "${PhotoGalleryScreen.baseImageUrl}${_limpiar(f["foto"])}";
-        final bool puedeBorrar = _puedeEliminar(f["created_at"]);
+
+        final bool puedeBorrar = _puedeEliminar();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Imagen Natural Rectangular
             Expanded(
               child: GestureDetector(
                 onTap: () => _verFotoGrande(urlCompleta),
@@ -351,6 +348,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                 ),
               ),
             ),
+            // Espacio para el botón de eliminar debajo
             Container(
               height: 50,
               padding: const EdgeInsets.only(top: 8.0),
