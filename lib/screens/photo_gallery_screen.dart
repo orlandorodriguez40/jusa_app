@@ -45,6 +45,12 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     _inicializarPantalla();
   }
 
+  @override
+  void dispose() {
+    // Liberar recursos si es necesario al cerrar la pantalla
+    super.dispose();
+  }
+
   String _limpiar(dynamic valor) {
     if (valor == null) {
       return "";
@@ -121,7 +127,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
               right: 20,
               child: IconButton(
                 icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  Navigator.pop(context);
+                },
               ),
             ),
           ],
@@ -138,10 +146,14 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         content: const Text("Esta acción borrará la imagen permanentemente."),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
               child: const Text("CANCELAR")),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Navigator.pop(context, true);
+            },
             child: const Text("ELIMINAR",
                 style:
                     TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
@@ -151,13 +163,14 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     );
 
     if (confirmar == true) {
-      setState(() => _actualizando = true);
+      setState(() {
+        _actualizando = true;
+      });
       try {
         final String idLimpio = _limpiar(fotoId);
         final String urlFinal =
             "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$idLimpio";
 
-        // Intentamos DELETE. Si falla con 405, probamos GET.
         var response = await http
             .delete(Uri.parse(urlFinal))
             .timeout(const Duration(seconds: 15));
@@ -184,7 +197,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         }
       } finally {
         if (mounted) {
-          setState(() => _actualizando = false);
+          setState(() {
+            _actualizando = false;
+          });
         }
       }
     }
@@ -199,7 +214,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
             "El servidor rechazó la operación. Verifique la ruta en el backend."),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+              },
               child: const Text("CERRAR"))
         ],
       ),
@@ -210,7 +227,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     if (_actualizando) {
       return;
     }
-    setState(() => _actualizando = true);
+    setState(() {
+      _actualizando = true;
+    });
     try {
       final idAsig = _limpiar(widget.asignacion?["id"]);
       final response = await http.get(Uri.parse(
@@ -228,7 +247,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _actualizando = false);
+        setState(() {
+          _actualizando = false;
+        });
       }
     }
   }
@@ -264,6 +285,13 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         backgroundColor: const Color(0xFF424949),
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
+        // ✅ Leading manual para evitar que la pantalla se ponga negra al regresar
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
         actions: [
           IconButton(
             icon: _actualizando
@@ -282,14 +310,15 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           : CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(child: _buildMapaSeccion()),
-                if (fotos.isEmpty)
+                if (fotos.isEmpty) ...[
                   const SliverFillRemaining(
                       hasScrollBody: false,
                       child: Center(child: Text("SIN FOTOS REGISTRADAS")))
-                else
+                ] else ...[
                   SliverPadding(
                       padding: const EdgeInsets.all(12),
                       sliver: _buildGridSliver()),
+                ],
               ],
             ),
     );
@@ -313,9 +342,8 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                     color: Colors.grey[300],
                     child: const Center(child: Text("Mapa no disponible")))
                 : GoogleMap(
-                    initialCameraPosition: CameraPosition(
-                        target: _ubicacionInicial,
-                        zoom: 15.0), // ✅ Corregido aquí
+                    initialCameraPosition:
+                        CameraPosition(target: _ubicacionInicial, zoom: 15.0),
                     markers: _markers,
                     onMapCreated: (c) {
                       if (!_controller.isCompleted) {
@@ -352,15 +380,44 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           children: [
             Expanded(
               child: GestureDetector(
-                onTap: () => _verFotoGrande(url),
-                child: Container(
-                  color: const Color(0xFFF2F4F4),
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.contain,
-                    errorBuilder: (c, e, s) => const Icon(Icons.broken_image,
-                        color: Colors.grey, size: 30),
-                  ),
+                onTap: () {
+                  _verFotoGrande(url);
+                },
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          url,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          errorBuilder: (c, e, s) => Container(
+                            color: Colors.grey[100],
+                            child: const Icon(Icons.broken_image,
+                                color: Colors.grey, size: 30),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.zoom_in_map,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -371,7 +428,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   ? SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () => _eliminarFoto(f["id"]),
+                        onPressed: () {
+                          _eliminarFoto(f["id"]);
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
                           foregroundColor: Colors.white,
