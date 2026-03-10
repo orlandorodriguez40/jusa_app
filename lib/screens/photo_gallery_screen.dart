@@ -30,6 +30,10 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   bool _actualizando = false;
   String _direccionEscrita = "Buscando dirección física...";
 
+  // ✅ VARIABLES PARA EL CONTADOR INVISIBLE (Tu teoría de 300 segundos)
+  int _segundosTranscurridos = 0;
+  Timer? _timerPermanencia;
+
   final Completer<GoogleMapController> _controller =
       Completer<GoogleMapController>();
   late LatLng _ubicacionInicial = const LatLng(0, 0);
@@ -43,6 +47,28 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     fotos =
         widget.fotosServidor != null ? List.from(widget.fotosServidor!) : [];
     _inicializarPantalla();
+    _iniciarContadorPermanencia(); // ✅ Iniciamos el conteo al entrar
+  }
+
+  @override
+  void dispose() {
+    _timerPermanencia?.cancel(); // ✅ Limpiamos el proceso al salir
+    super.dispose();
+  }
+
+  // ✅ LÓGICA DEL CONTADOR AUTOMÁTICO
+  void _iniciarContadorPermanencia() {
+    _timerPermanencia = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          _segundosTranscurridos++;
+        });
+        // Si llega a 300 (5 min), detenemos el timer para liberar memoria
+        if (_segundosTranscurridos >= 300) {
+          timer.cancel();
+        }
+      }
+    });
   }
 
   String _limpiar(dynamic valor) {
@@ -89,9 +115,10 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         Marker(markerId: const MarkerId('punto'), position: _ubicacionInicial));
   }
 
+  // ✅ APLICACIÓN DE LA TEORÍA: Nivel 3 + Contador < 300
   bool _puedeEliminar() {
     final String nivelActual = _limpiar(widget.nivelId);
-    return nivelActual == "3";
+    return nivelActual == "3" && _segundosTranscurridos < 300;
   }
 
   void _verFotoGrande(String url) {
@@ -278,7 +305,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                 fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF424949),
         centerTitle: true,
-        // ✅ Flecha de regreso original restaurada
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
@@ -362,6 +388,8 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       delegate: SliverChildBuilderDelegate((context, index) {
         final f = fotos[index];
         final url = "${PhotoGalleryScreen.baseImageUrl}${_limpiar(f["foto"])}";
+
+        // ✅ EL BOTÓN DEPENDE DEL CONTADOR INVISIBLE
         final bool puedeBorrar = _puedeEliminar();
 
         return Column(
@@ -371,7 +399,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                 onTap: () {
                   _verFotoGrande(url);
                 },
-                // ✅ Stack y lupa ELIMINADOS. Volvemos al diseño simple.
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.network(
