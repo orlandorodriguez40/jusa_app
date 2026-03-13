@@ -30,12 +30,11 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final Logger logger = Logger();
-  bool _loading = true;
+  bool _loading = false;
   bool _sendingPhoto = false;
   List<dynamic> _asignaciones = [];
   late Map<String, dynamic> _userData;
 
-  // Variables de Filtros (Nivel 5)
   List<dynamic> _clientes = [];
   List<dynamic> _supervisores = [];
   List<dynamic> _tipos = [];
@@ -63,10 +62,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (widget.nivelId == 5) {
       await Future.wait([
         _fetchListaClientes(),
-        _fetchListaSupervisores(),
         _fetchListaTipos(),
       ]);
-      await _fetchAsignaciones();
     } else {
       await _fetchAsignaciones();
     }
@@ -82,50 +79,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return "REPORTE FOTOGRÁFICO";
   }
 
-  // --- LÓGICA DE GEOLOCALIZACIÓN Y FOTOS ---
-
-  Future<Position> _determinePosition() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return Future.error('El GPS está desactivado.');
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return Future.error('Permiso denegado.');
-      }
-    }
-    return await Geolocator.getCurrentPosition();
-  }
-
-  Future<File> _addWatermark(File imageFile, Position pos) async {
-    final bytes = await imageFile.readAsBytes();
-    img.Image? originalImage = img.decodeImage(bytes);
-    if (originalImage == null) {
-      return imageFile;
-    }
-
-    String timestamp = DateTime.now().toString().split('.')[0];
-    String text =
-        "LAT: ${pos.latitude.toStringAsFixed(6)}\nLON: ${pos.longitude.toStringAsFixed(6)}\nFECHA: $timestamp";
-
-    img.drawString(originalImage, text,
-        font: img.arial24,
-        x: 30,
-        y: originalImage.height - 140,
-        color: img.ColorRgba8(255, 255, 255, 255));
-
-    final tempDir = await getTemporaryDirectory();
-    final path =
-        "${tempDir.path}/marked_${DateTime.now().millisecondsSinceEpoch}.jpg";
-    final File markedFile = File(path);
-    await markedFile.writeAsBytes(img.encodeJpg(originalImage, quality: 90));
-    return markedFile;
-  }
-
-  // --- PETICIONES API (FILTROS) ---
+  // --- PETICIONES API ---
 
   Future<void> _fetchListaClientes() async {
     try {
@@ -142,14 +96,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Future<void> _fetchListaSupervisores() async {
+  Future<void> _fetchListaSupervisores(String clienteId) async {
+    if (clienteId == "TODOS") {
+      setState(() {
+        _supervisores = [];
+        _selectedSupervisor = "TODOS";
+      });
+      return;
+    }
     try {
       final response = await http.get(Uri.parse(
-          "https://sistema.jusaimpulsemkt.com/api/lista-supervisores-app/4"));
+          "https://sistema.jusaimpulsemkt.com/api/lista-supervisores-app/$clienteId"));
       if (response.statusCode == 200 && mounted) {
         final decoded = json.decode(response.body);
         setState(() {
           _supervisores = decoded["datos"] ?? [];
+          _selectedSupervisor = "TODOS";
         });
       }
     } catch (e) {
@@ -172,8 +134,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // --- OBTENER ASIGNACIONES (BOTÓN MOSTRAR) ---
-
   Future<void> _fetchAsignaciones() async {
     if (!mounted) {
       return;
@@ -190,19 +150,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
       String tId = _selectedTipo == "TODOS" ? "0" : _selectedTipo;
       apiUrl =
           "https://sistema.jusaimpulsemkt.com/api/asignaciones-asistente-app/$cId/$sId/$tId";
-    } else if (widget.nivelId == 2) {
-      apiUrl =
-          "https://sistema.jusaimpulsemkt.com/api/asignaciones-supervisor-app/${widget.userId}";
-    } else if (widget.nivelId == 4) {
-      apiUrl =
-          "https://sistema.jusaimpulsemkt.com/api/asignaciones-cliente-app/${widget.userId}";
     } else {
-      apiUrl =
-          "https://sistema.jusaimpulsemkt.com/api/mis-asignaciones-app/${widget.userId}";
+      if (widget.nivelId == 2) {
+        apiUrl =
+            "https://sistema.jusaimpulsemkt.com/api/asignaciones-supervisor-app/${widget.userId}";
+      } else if (widget.nivelId == 4) {
+        apiUrl =
+            "https://sistema.jusaimpulsemkt.com/api/asignaciones-cliente-app/${widget.userId}";
+      } else {
+        apiUrl =
+            "https://sistema.jusaimpulsemkt.com/api/mis-asignaciones-app/${widget.userId}";
+      }
     }
 
     try {
-      final response = await http.get(Uri.parse(apiUrl), headers: const {
+      final response = await http.get(Uri.parse(apiUrl), headers: {
         "Accept": "application/json"
       }).timeout(const Duration(seconds: 15));
 
@@ -213,7 +175,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
       }
     } catch (e) {
-      debugPrint("Error Fetch Dashboard: $e");
+      debugPrint("Error Fetch: $e");
     } finally {
       if (mounted) {
         setState(() {
@@ -223,7 +185,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // --- CÁMARA Y GALERÍA ---
+  // --- LÓGICA DE FOTOS ---
+
+  Future<Position> _determinePosition() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return Future.error('El GPS está desactivado.');
+    }
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        return Future.error('Permiso denegado.');
+      }
+    }
+    return await Geolocator.getCurrentPosition();
+  }
+
+  Future<File> _addWatermark(File imageFile, Position pos) async {
+    final bytes = await imageFile.readAsBytes();
+    img.Image? originalImage = img.decodeImage(bytes);
+    if (originalImage == null) {
+      return imageFile;
+    }
+    String timestamp = DateTime.now().toString().split('.')[0];
+    String text =
+        "LAT: ${pos.latitude.toStringAsFixed(6)}\nLON: ${pos.longitude.toStringAsFixed(6)}\nFECHA: $timestamp";
+    img.drawString(originalImage, text,
+        font: img.arial24,
+        x: 30,
+        y: originalImage.height - 140,
+        color: img.ColorRgba8(255, 255, 255, 255));
+    final tempDir = await getTemporaryDirectory();
+    final path =
+        "${tempDir.path}/marked_${DateTime.now().millisecondsSinceEpoch}.jpg";
+    final File markedFile = File(path);
+    await markedFile.writeAsBytes(img.encodeJpg(originalImage, quality: 90));
+    return markedFile;
+  }
 
   Future<void> _takePhoto(dynamic asignacion) async {
     Position? currentPosition;
@@ -236,18 +235,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
       return;
     }
-
     final ImagePicker picker = ImagePicker();
     final XFile? photo =
         await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
     if (photo == null || !mounted) {
       return;
     }
-
     setState(() {
       _sendingPhoto = true;
     });
-
     try {
       File markedFile = await _addWatermark(File(photo.path), currentPosition);
       final request = http.MultipartRequest('POST',
@@ -257,7 +253,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       request.fields['longitud'] = currentPosition.longitude.toString();
       request.files
           .add(await http.MultipartFile.fromPath('file', markedFile.path));
-
       final response = await request.send();
       if (mounted && response.statusCode == 200) {
         ScaffoldMessenger.of(context)
@@ -365,7 +360,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildPanelFiltrosAsistente() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Column(
         children: [
           Row(
@@ -378,9 +373,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   idKey: "cliente_id",
                   nameKey: "name",
                   onChanged: (val) {
-                    setState(() {
-                      _selectedCliente = val!;
-                    });
+                    if (val != null) {
+                      setState(() {
+                        _selectedCliente = val;
+                        _selectedSupervisor = "TODOS";
+                      });
+                      _fetchListaSupervisores(val);
+                    }
                   },
                 ),
               ),
@@ -416,25 +415,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   },
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.only(right: 8, left: 4),
-                child: ElevatedButton(
-                  onPressed: _fetchAsignaciones,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF424949),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 15),
-                  ),
-                  child: const Text("MOSTRAR",
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                ),
-              ),
             ],
           ),
+          const SizedBox(height: 12),
+          Center(
+            child: SizedBox(
+              width: 180,
+              child: ElevatedButton(
+                onPressed: _fetchAsignaciones,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text("MOSTRAR",
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           const Divider(),
         ],
       ),
@@ -450,7 +452,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required ValueChanged<String?> onChanged,
   }) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      margin: const EdgeInsets.all(4),
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
           color: Colors.grey[50],
@@ -468,12 +470,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Text("TODOS ($label)",
                   style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
-            ...items.map((item) {
-              return DropdownMenuItem<String>(
-                value: item[idKey].toString(),
-                child: Text(item[nameKey] ?? "Sin nombre"),
-              );
-            }),
+            ...items.map((item) => DropdownMenuItem<String>(
+                  value: item[idKey].toString(),
+                  child: Text(item[nameKey] ?? "Sin nombre"),
+                )),
           ],
           onChanged: onChanged,
         ),
@@ -485,17 +485,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-
     if (_asignaciones.isEmpty) {
-      return RefreshIndicator(
-          onRefresh: _fetchAsignaciones,
-          child: ListView(children: const [
-            SizedBox(height: 50),
-            Center(
-                child: Text("SIN RESULTADOS",
-                    style: TextStyle(
-                        color: Colors.grey, fontWeight: FontWeight.bold)))
-          ]));
+      return const Center(
+          child: Text("SIN RESULTADOS",
+              style:
+                  TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)));
     }
 
     return RefreshIndicator(
