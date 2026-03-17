@@ -20,29 +20,17 @@ jobs:
       FLUTTER_VERSION: '3.22.0'
 
     steps:
-      # ===
-      # 📥 Checkout
-      # ===
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ===
-      # ⚙️ Flutter
-      # ===
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
 
-      # ===
-      # 📦 Dependencias
-      # ===
       - name: Install dependencies
         run: flutter pub get
 
-      # ===
-      # 🔐 ANDROID KEYSTORE
-      # ===
       - name: Decode keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
@@ -54,48 +42,21 @@ jobs:
           echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> android/key.properties
           echo "storeFile=upload-keystore.jks" >> android/key.properties
 
-      # ===
-      # 🧹 CLEAN
-      # ===
       - name: Flutter clean
         run: flutter clean
 
-      # ===
-      # 🤖 ANDROID BUILD
-      # ===
       - name: Build APK (Release)
         run: flutter build apk --release
 
       - name: Build AAB (Release)
         run: flutter build appbundle --release
 
-      # ===
-      # 🍏 VALIDAR SECRETS iOS
-      # ===
-      - name: Validate iOS secrets
-        id: ios_check
-        run: |
-          if [ -z "${{ secrets.IOS_CERTIFICATE_BASE64 }}" ] || \
-             [ -z "${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}" ] || \
-             [ -z "${{ secrets.IOS_CERTIFICATE_PASSWORD }}" ] || \
-             [ -z "${{ secrets.KEYCHAIN_PASSWORD }}" ]; then
-            echo "ios_ready=false" >> $GITHUB_OUTPUT
-            echo "⚠️ iOS build SKIPPED: faltan secrets"
-          else
-            echo "ios_ready=true" >> $GITHUB_OUTPUT
-          fi
-
-      # ===
-      # 🍏 CONFIGURAR iOS (SOLO SI HAY SECRETS)
-      # ===
       - name: Decode iOS certificate & profile
-        if: steps.ios_check.outputs.ios_ready == 'true'
         run: |
           echo "${{ secrets.IOS_CERTIFICATE_BASE64 }}" | base64 --decode > certificate.p12
           echo "${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}" | base64 --decode > profile.mobileprovision
 
       - name: Setup keychain
-        if: steps.ios_check.outputs.ios_ready == 'true'
         run: |
           security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
           security default-keychain -s build.keychain
@@ -103,21 +64,20 @@ jobs:
           security import certificate.p12 -k build.keychain -P "${{ secrets.IOS_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign
 
       - name: Install provisioning profile
-        if: steps.ios_check.outputs.ios_ready == 'true'
         run: |
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
 
-      # ===
-      # 🍏 BUILD IPA
-      # ===
       - name: Build IPA
-        if: steps.ios_check.outputs.ios_ready == 'true'
         run: flutter build ipa --release
 
-      # ===
-      # 📤 ARTIFACTS
-      # ===
+      - name: List IPA files
+        run: |
+          echo "Contenido de build/ios:"
+          ls -R build/ios || echo "No existe carpeta ios"
+          echo "Contenido de build/ios/ipa:"
+          ls -R build/ios/ipa || echo "No se generó IPA"
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -131,15 +91,11 @@ jobs:
           path: build/app/outputs/bundle/release/app-release.aab
 
       - name: Upload IPA Artifact
-        if: steps.ios_check.outputs.ios_ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-release-ipa
           path: build/ios/ipa/*.ipa
 
-      # ===
-      # 🚀 RELEASE
-      # ===
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: ncipollo/release-action@v1
