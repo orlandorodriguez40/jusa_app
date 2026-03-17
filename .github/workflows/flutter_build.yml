@@ -10,24 +10,24 @@ on:
 
 jobs:
   build-release:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest  # 👈 necesario para iOS
 
     permissions:
       contents: write
       actions: write
 
     env:
-      FLUTTER_VERSION: '3.22.0' # 👈 usa la versión estable que tengas instalada localmente
+      FLUTTER_VERSION: '3.22.0'
 
     steps:
       # ===
-      # 📥 Checkout del repositorio
+      # 📥 Checkout
       # ===
       - name: Checkout repository
         uses: actions/checkout@v4
 
       # ===
-      # ⚙️ Configurar Flutter
+      # ⚙️ Flutter
       # ===
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -35,13 +35,13 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
 
       # ===
-      # 📦 Instalar dependencias
+      # 📦 Dependencias
       # ===
       - name: Install dependencies
         run: flutter pub get
 
       # ===
-      # 🔐 Decode keystore desde secrets
+      # 🔐 ANDROID KEYSTORE
       # ===
       - name: Decode keystore
         run: |
@@ -55,11 +55,34 @@ jobs:
           echo "storeFile=upload-keystore.jks" >> android/key.properties
 
       # ===
-      # 🧹 Clean & Build
+      # 🍏 iOS CERTIFICADOS
+      # ===
+      - name: Decode iOS certificate & profile
+        run: |
+          echo "${{ secrets.IOS_CERTIFICATE_BASE64 }}" | base64 --decode > certificate.p12
+          echo "${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}" | base64 --decode > profile.mobileprovision
+
+      - name: Setup keychain
+        run: |
+          security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+          security import certificate.p12 -k build.keychain -P "${{ secrets.IOS_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign
+
+      - name: Install provisioning profile
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      # ===
+      # 🧹 CLEAN
       # ===
       - name: Flutter clean
         run: flutter clean
 
+      # ===
+      # 🤖 ANDROID BUILD
+      # ===
       - name: Build APK (Release)
         run: flutter build apk --release
 
@@ -67,7 +90,13 @@ jobs:
         run: flutter build appbundle --release
 
       # ===
-      # 📤 Upload Artifacts
+      # 🍏 iOS BUILD
+      # ===
+      - name: Build IPA
+        run: flutter build ipa --release
+
+      # ===
+      # 📤 ARTIFACTS
       # ===
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -81,8 +110,14 @@ jobs:
           name: app-release-aab
           path: build/app/outputs/bundle/release/app-release.aab
 
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-ipa
+          path: build/ios/ipa/*.ipa
+
       # ===
-      # 🚀 Crear GitHub Release (SOLO TAGS)
+      # 🚀 RELEASE
       # ===
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -95,4 +130,5 @@ jobs:
           artifacts: |
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/bundle/release/app-release.aab
+            build/ios/ipa/*.ipa
           token: ${{ secrets.GITHUB_TOKEN }}
