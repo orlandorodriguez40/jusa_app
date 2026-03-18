@@ -31,58 +31,40 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # --- SECCIÓN ANDROID (Mantenida igual) ---
-      - name: Decode keystore
+      # --- SECCIÓN ANDROID ---
+      - name: Build Android APK
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
-
-      - name: Create key.properties
-        run: |
-          echo "storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}" > android/key.properties
-          echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> android/key.properties
-          echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> android/key.properties
-          echo "storeFile=upload-keystore.jks" >> android/key.properties
-
-      - name: Build APK & AAB
-        run: |
-          flutter clean
+          # Solo si tienes los secrets configurados, si no, comenta estas lineas
+          # echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
           flutter build apk --release
-          flutter build appbundle --release
 
-      # --- SECCIÓN iOS PARA APPETIZE (CORREGIDA) ---
-      # Aquí eliminamos los certificados y usamos el modo simulador
-      - name: Build iOS Simulator App (For Appetize)
+      # --- SECCIÓN iOS PARA APPETIZE (SOLUCIÓN DEFINITIVA) ---
+      - name: Build iOS Simulator App
         run: |
+          # 1. Forzar la creación de la carpeta ios/Flutter y archivos de ayuda
+          # Esto soluciona el error "cannot load such file -- .../podhelper.rb"
+          flutter precache --ios
+          flutter create . --platforms=ios
+          
+          # 2. Asegurar que el Podfile use la versión 14.0 para Google Maps
+          sed -i '' "s/platform :ios, '11.0'/platform :ios, '14.0'/g" ios/Podfile || true
+          
+          # 3. Compilar para simulador
           flutter build ios --simulator --debug --no-codesign
-          # Comprimimos el archivo .app para que Appetize lo acepte
+          
+          # 4. Comprimir para Appetize
           cd build/ios/iphonesimulator
           zip -r Runner.app.zip Runner.app
 
       # --- SUBIR ARTEFACTOS ---
-      - name: Upload Android APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-
       - name: Upload iOS Simulator (Appetize)
         uses: actions/upload-artifact@v4
         with:
           name: ios-simulator-app
           path: build/ios/iphonesimulator/Runner.app.zip
 
-      # --- CREAR RELEASE EN GITHUB ---
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: ncipollo/release-action@v1
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
         with:
-          tag: ${{ github.ref_name }}
-          name: Flutter Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          artifacts: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/bundle/release/app-release.aab
-            build/ios/iphonesimulator/Runner.app.zip
-          token: ${{ secrets.GITHUB_TOKEN }}
-        # --- FIN CREAR RELEASE EN GITHUB ---  
+          name: app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
