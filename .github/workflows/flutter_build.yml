@@ -23,6 +23,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Importante para que el build de Android no falle en macOS-latest
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -31,45 +38,45 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # --- SECCIÓN ANDROID ---
-      - name: Build Android APK
+      # --- SECCIÓN ANDROID (APK y AAB) ---
+      - name: Build Android Release
         run: |
-          # Si tienes configurados los secrets en GitHub, esto funcionará. 
-          # Si no, generará un APK sin firmar.
+          # Generar el APK para instalación directa
           flutter build apk --release
+          # Generar el AAB para subir a Google Play Console
+          flutter build appbundle --release
 
-      # --- SECCIÓN iOS PARA APPETIZE (SOLUCIÓN DEFINITIVA) ---
+      # --- SECCIÓN iOS PARA APPETIZE ---
       - name: Build iOS Simulator App
         run: |
           # 1. Limpieza de residuos de Windows
           rm -rf ios/Podfile ios/Podfile.lock ios/Flutter/podhelper.rb
           
-          # 2. Re-generar archivos nativos de iOS en el servidor Mac
+          # 2. Re-generar archivos nativos de iOS
           flutter precache --ios
           flutter create . --platforms=ios
           
           # 3. FORZAR iOS 14.0 en el Podfile
-          # Este comando busca cualquier línea de 'platform' y la reemplaza por la correcta
           sed -i '' "s/.*platform :ios.*/platform :ios, '14.0'/" ios/Podfile
           
-          # 4. Instalar CocoaPods con la nueva configuración
+          # 4. Instalar CocoaPods
           cd ios
           pod install --repo-update
           cd ..
           
-          # 5. Compilar para simulador (No requiere cuenta de Apple de $99)
+          # 5. Compilar para simulador
           flutter build ios --simulator --debug --no-codesign
           
           # 6. Crear el ZIP para Appetize.io
           cd build/ios/iphonesimulator
           zip -r Runner.app.zip Runner.app
 
-      # --- SUBIR ARTEFACTOS ---
-      - name: Upload iOS Simulator (Appetize)
+      # --- SUBIR ARTEFACTOS A ACTIONS ---
+      - name: Upload Android Bundle (AAB)
         uses: actions/upload-artifact@v4
         with:
-          name: ios-simulator-app
-          path: build/ios/iphonesimulator/Runner.app.zip
+          name: app-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
@@ -77,7 +84,13 @@ jobs:
           name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      # --- CREAR RELEASE EN GITHUB (Solo si subes un Tag como v1.0.0) ---
+      - name: Upload iOS Simulator (Appetize)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-app
+          path: build/ios/iphonesimulator/Runner.app.zip
+
+      # --- CREAR RELEASE EN GITHUB ---
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: ncipollo/release-action@v1
@@ -86,5 +99,6 @@ jobs:
           name: Flutter Release ${{ github.ref_name }}
           artifacts: |
             build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
             build/ios/iphonesimulator/Runner.app.zip
           token: ${{ secrets.GITHUB_TOKEN }}
