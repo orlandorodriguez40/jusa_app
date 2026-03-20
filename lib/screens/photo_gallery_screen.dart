@@ -30,7 +30,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   bool _actualizando = false;
   String _direccionEscrita = "Buscando dirección física...";
 
-  // Timer para refrescar la UI cada segundo y ocultar el botón justo al cumplir los 300s
   Timer? _timerRefresco;
 
   final Completer<GoogleMapController> _controller =
@@ -55,7 +54,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     super.dispose();
   }
 
-  // Refresca la pantalla cada segundo para que el botón desaparezca en tiempo real
   void _iniciarTimerRefresco() {
     _timerRefresco = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
@@ -65,45 +63,47 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   String _limpiar(dynamic valor) {
-    if (valor == null) return "";
+    if (valor == null) {
+      return "";
+    }
     return valor.toString().trim().replaceAll(RegExp(r'[\n\r\t]'), '');
   }
 
-  /// ✅ NUEVA LÓGICA PERMANENTE:
-  /// Compara la hora de creación de la foto con la hora actual.
   bool _puedeEliminarFotoIndividual(dynamic foto) {
-    final String nivelActual = _limpiar(widget.nivelId);
+    final int nivelActual = int.tryParse(_limpiar(widget.nivelId)) ?? 0;
 
-    // Si es Administrador/Asistente (5), siempre puede borrar
-    if (nivelActual == "5") return true;
+    // Nivel 5 (Asistente) siempre puede borrar
+    if (nivelActual == 5) {
+      return true;
+    }
 
-    // Si es Chofer (3), validamos los 300 segundos (5 min)
-    if (nivelActual == "3") {
+    // Nivel 3 (Chofer) validación de 300 segundos
+    if (nivelActual == 3) {
       try {
-        // Obtenemos la fecha de la foto. Si no existe 'created_at', usamos 'fecha' y 'hora'
-        String? fechaStr =
+        String? fechaOriginal =
             foto["created_at"] ?? "${foto["fecha"]} ${foto["hora"]}";
-        if (fechaStr == null) return false;
 
-        DateTime horaFoto = DateTime.parse(fechaStr);
+        if (fechaOriginal == null || fechaOriginal.contains("null")) {
+          return false;
+        }
+
+        DateTime horaFoto = DateTime.parse(fechaOriginal);
         DateTime ahora = DateTime.now();
 
-        int diferenciaSegundos = ahora.difference(horaFoto).inSeconds;
+        int diferencia = ahora.difference(horaFoto).inSeconds;
 
-        // Solo permite si han pasado menos de 300 segundos
-        return diferenciaSegundos < 300;
+        return diferencia >= 0 && diferencia < 300;
       } catch (e) {
-        // Si hay error en formato de fecha, por seguridad no permitimos borrar
+        debugPrint("Error parseando fecha de foto: $e");
         return false;
       }
     }
 
-    return false; // Otros niveles no borran
+    return false;
   }
 
   bool _puedeTomarFoto() {
-    final String nivelLimpio = _limpiar(widget.nivelId);
-    return nivelLimpio == "3";
+    return _limpiar(widget.nivelId) == "3";
   }
 
   void _inicializarPantalla() {
@@ -164,7 +164,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   Future<void> _ajustarCamaraATodosLosPuntos() async {
-    if (_markers.isEmpty) return;
+    if (_markers.isEmpty) {
+      return;
+    }
     final GoogleMapController controller = await _controller.future;
 
     double minLat = _markers.first.position.latitude;
@@ -173,10 +175,18 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     double maxLng = _markers.first.position.longitude;
 
     for (Marker m in _markers) {
-      if (m.position.latitude < minLat) minLat = m.position.latitude;
-      if (m.position.latitude > maxLat) maxLat = m.position.latitude;
-      if (m.position.longitude < minLng) minLng = m.position.longitude;
-      if (m.position.longitude > maxLng) maxLng = m.position.longitude;
+      if (m.position.latitude < minLat) {
+        minLat = m.position.latitude;
+      }
+      if (m.position.latitude > maxLat) {
+        maxLat = m.position.latitude;
+      }
+      if (m.position.longitude < minLng) {
+        minLng = m.position.longitude;
+      }
+      if (m.position.longitude > maxLng) {
+        maxLng = m.position.longitude;
+      }
     }
 
     controller.animateCamera(
@@ -242,7 +252,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       ),
     );
 
-    if (confirmar != true) return;
+    if (confirmar != true) {
+      return;
+    }
 
     setState(() => _actualizando = true);
     try {
@@ -269,7 +281,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
             .showSnackBar(const SnackBar(content: Text("❌ Error de red")));
       }
     } finally {
-      if (mounted) setState(() => _actualizando = false);
+      if (mounted) {
+        setState(() => _actualizando = false);
+      }
     }
   }
 
@@ -346,15 +360,14 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
               : CustomScrollView(
                   slivers: [
                     SliverToBoxAdapter(child: _buildMapaSeccion()),
-                    if (fotos.isEmpty) ...{
+                    if (fotos.isEmpty)
                       const SliverFillRemaining(
                           hasScrollBody: false,
                           child: Center(child: Text("SIN FOTOS REGISTRADAS")))
-                    } else ...{
+                    else
                       SliverPadding(
                           padding: const EdgeInsets.all(12),
                           sliver: _buildGridSliver()),
-                    },
                   ],
                 ),
           floatingActionButton: _puedeTomarFoto()
@@ -390,8 +403,10 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   Widget _buildMapaSeccion() {
-    final String nivelActual = _limpiar(widget.nivelId);
-    if (nivelActual == "3" || nivelActual == "5") {
+    final int nivelActual = int.tryParse(_limpiar(widget.nivelId)) ?? 0;
+
+    // Solo el Chofer (3) no ve el mapa. Supervisor (2), Cliente (4) y Asistente (5) sí.
+    if (nivelActual == 3) {
       return const SizedBox.shrink();
     }
 
@@ -479,7 +494,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         final f = fotos[index];
         final url = "${PhotoGalleryScreen.baseImageUrl}${_limpiar(f["foto"])}";
 
-        // Validamos individualmente cada foto para mostrar o no el botón
         final bool puedeBorrar = _puedeEliminarFotoIndividual(f);
 
         return Column(
@@ -501,8 +515,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                 ),
               ),
             ),
-            // Solo dibujamos el botón si la foto tiene menos de 5 min (o si es nivel 5)
-            if (puedeBorrar) ...{
+            if (puedeBorrar)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: SizedBox(
@@ -522,7 +535,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   ),
                 ),
               ),
-            },
           ],
         );
       }, childCount: fotos.length),
