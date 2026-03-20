@@ -30,7 +30,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   bool _actualizando = false;
   String _direccionEscrita = "Buscando dirección física...";
 
-  // Timer para que el botón de eliminar desaparezca en tiempo real (segundo a segundo)
+  // Timer para que la UI se refresque y el botón desaparezca al cumplir el tiempo
   Timer? _timerRefresco;
 
   final Completer<GoogleMapController> _controller =
@@ -46,7 +46,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     fotos =
         widget.fotosServidor != null ? List.from(widget.fotosServidor!) : [];
     _inicializarPantalla();
-    _iniciarRelojSeguridad();
+    _iniciarTimerRefresco();
   }
 
   @override
@@ -55,8 +55,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     super.dispose();
   }
 
-  // Refresca la UI cada segundo para actualizar la validación de los 300 seg
-  void _iniciarRelojSeguridad() {
+  void _iniciarTimerRefresco() {
     _timerRefresco = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {});
@@ -71,7 +70,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     return valor.toString().trim().replaceAll(RegExp(r'[\n\r\t]'), '');
   }
 
-  // Lógica basada puramente en el tiempo transcurrido desde la toma
+  /// ✅ LÓGICA DE VALIDACIÓN CON ESCÁNER DE CAMPOS
   bool _puedeEliminarFotoIndividual(dynamic foto) {
     final int nivelActual = int.tryParse(_limpiar(widget.nivelId)) ?? 0;
 
@@ -80,27 +79,44 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       return true;
     }
 
-    // Nivel 3 (Chofer) validación por reloj
+    // Nivel 3 (Chofer) validación por tiempo
     if (nivelActual == 3) {
       try {
-        String? rawFecha =
-            foto["created_at"] ?? "${foto["fecha"]} ${foto["hora"]}";
+        // 1. 🔎 IMPRIMIMOS EL JSON PARA DESCUBRIR LOS NOMBRES DE LOS CAMPOS
+        debugPrint(
+            "🔎 [ANALISIS] Campos recibidos en foto ${foto['id']}: ${foto.keys.toList()}");
+        debugPrint("🔎 [CONTENIDO] Datos completos: $foto");
 
-        if (rawFecha == null || rawFecha.contains("null")) {
+        // 2. Intentamos capturar la fecha probando varios nombres posibles
+        String? rawFecha = foto["created_at"] ??
+            foto["fecha_registro"] ??
+            foto["fecha_creacion"] ??
+            (foto["fecha"] != null && foto["hora"] != null
+                ? "${foto["fecha"]} ${foto["hora"]}"
+                : null);
+
+        if (rawFecha == null || rawFecha.toLowerCase().contains("null")) {
+          debugPrint(
+              "❌ [ERROR] No se encontró ninguna fecha en los campos conocidos.");
           return false;
         }
 
-        // Normalizamos formato para Dart (YYYY-MM-DD HH:mm:ss)
+        // 3. Normalizamos y calculamos
         String fechaLimpia = rawFecha.replaceAll('/', '-');
         DateTime horaFoto = DateTime.parse(fechaLimpia);
         DateTime ahora = DateTime.now();
 
-        // Calculamos la diferencia absoluta en segundos
         int diferencia = ahora.difference(horaFoto).inSeconds;
 
-        // Si han pasado menos de 300 segundos, el botón es visible
-        return diferencia >= 0 && diferencia < 300;
+        // 4. Tolerancia de prueba (20 minutos = 1200 segundos)
+        bool esValido = diferencia < 1200 && diferencia > -1200;
+
+        debugPrint(
+            "⏱️ [TIEMPO] ID ${foto['id']} -> Diferencia: $diferencia seg. Visible: $esValido");
+
+        return esValido;
       } catch (e) {
+        debugPrint("❌ [FALLO] Error procesando fecha: $e");
         return false;
       }
     }
@@ -411,7 +427,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   Widget _buildMapaSeccion() {
     final int nivelActual = int.tryParse(_limpiar(widget.nivelId)) ?? 0;
 
-    // Solo el Chofer (3) no ve el mapa.
     if (nivelActual == 3) {
       return const SizedBox.shrink();
     }
@@ -500,7 +515,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         final f = fotos[index];
         final url = "${PhotoGalleryScreen.baseImageUrl}${_limpiar(f["foto"])}";
 
-        // La validación se evalúa en cada renderizado (cada segundo gracias al timer)
         final bool puedeBorrar = _puedeEliminarFotoIndividual(f);
 
         return Column(
