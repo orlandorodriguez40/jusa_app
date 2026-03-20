@@ -61,7 +61,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         setState(() {
           _segundosTranscurridos++;
         });
-        if (_segundosTranscurridos >= 300) {
+        if (_segundosTranscurridos > 305) {
           timer.cancel();
         }
       }
@@ -71,6 +71,19 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   String _limpiar(dynamic valor) {
     if (valor == null) return "";
     return valor.toString().trim().replaceAll(RegExp(r'[\n\r\t]'), '');
+  }
+
+  bool _puedeEliminar() {
+    final String nivelActual = _limpiar(widget.nivelId);
+    if (nivelActual == "5") return true;
+    if (nivelActual == "3") return _segundosTranscurridos < 300;
+    return false;
+  }
+
+  // ✅ CORRECCIÓN: Ahora solo el nivel 3 (Chofer) puede ver el botón de cámara.
+  bool _puedeTomarFoto() {
+    final String nivelLimpio = _limpiar(widget.nivelId);
+    return nivelLimpio == "3";
   }
 
   void _inicializarPantalla() {
@@ -84,27 +97,22 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
 
   void _procesarFotosYMarcadores() {
     _markers.clear();
-
     if (fotos.isNotEmpty) {
-      // Ordenar fotos por ID descendente (más nueva primero)
       fotos.sort((a, b) {
         int idA = int.tryParse(_limpiar(a['id'])) ?? 0;
         int idB = int.tryParse(_limpiar(b['id'])) ?? 0;
         return idB.compareTo(idA);
       });
 
-      for (var i = 0; i < fotos.length; i++) {
-        final f = fotos[i];
+      for (var f in fotos) {
         double? lat = double.tryParse(_limpiar(f["latitud"]));
         double? lng = double.tryParse(_limpiar(f["longitud"]));
 
         if (lat != null && lng != null && lat != 0) {
-          // La primera ubicación válida será nuestro centro inicial
           if (_markers.isEmpty) {
             _ubicacionInicial = LatLng(lat, lng);
             _obtenerDireccionEscrita(lat.toString(), lng.toString());
           }
-
           _markers.add(
             Marker(
               markerId: MarkerId('foto_${f["id"]}'),
@@ -121,14 +129,12 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       }
     }
 
-    // Si después de revisar fotos no hay marcadores, usamos la ubicación de la asignación
     if (_markers.isEmpty) {
       double latAsig =
           double.tryParse(_limpiar(widget.asignacion?["latitud"])) ?? 0.0;
       double lngAsig =
           double.tryParse(_limpiar(widget.asignacion?["longitud"])) ?? 0.0;
       _ubicacionInicial = LatLng(latAsig, lngAsig);
-
       if (latAsig != 0) {
         _markers.add(Marker(
             markerId: const MarkerId('punto_base'),
@@ -139,7 +145,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
 
   Future<void> _ajustarCamaraATodosLosPuntos() async {
     if (_markers.isEmpty) return;
-
     final GoogleMapController controller = await _controller.future;
 
     double minLat = _markers.first.position.latitude;
@@ -157,17 +162,11 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     controller.animateCamera(
       CameraUpdate.newLatLngBounds(
         LatLngBounds(
-          southwest: LatLng(minLat, minLng),
-          northeast: LatLng(maxLat, maxLng),
-        ),
-        70.0, // Padding para que los marcadores no toquen el borde
+            southwest: LatLng(minLat, minLng),
+            northeast: LatLng(maxLat, maxLng)),
+        70.0,
       ),
     );
-  }
-
-  bool _puedeEliminar() {
-    final String nivelActual = _limpiar(widget.nivelId);
-    return nivelActual == "3" && _segundosTranscurridos < 300;
   }
 
   void _verFotoGrande(String url) {
@@ -178,18 +177,8 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         child: Stack(
           children: [
             Center(
-              child: InteractiveViewer(
-                child: Image.network(
-                  url,
-                  fit: BoxFit.contain,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return const Center(
-                        child: CircularProgressIndicator(color: Colors.white));
-                  },
-                ),
-              ),
-            ),
+                child: InteractiveViewer(
+                    child: Image.network(url, fit: BoxFit.contain))),
             Positioned(
               top: 40,
               right: 20,
@@ -205,6 +194,15 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   Future<void> _eliminarFoto(dynamic fotoId) async {
+    if (!_puedeEliminar()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text("❌ No tienes permisos o el tiempo expiró."),
+            backgroundColor: Colors.red),
+      );
+      return;
+    }
+
     final bool? confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -231,16 +229,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       final String idLimpio = _limpiar(fotoId);
       final String urlFinal =
           "https://sistema.jusaimpulsemkt.com/api/eliminar-foto-app/$idLimpio";
-
       var response = await http
           .delete(Uri.parse(urlFinal))
           .timeout(const Duration(seconds: 15));
-
-      if (response.statusCode == 405) {
-        response = await http
-            .get(Uri.parse(urlFinal))
-            .timeout(const Duration(seconds: 15));
-      }
 
       if (response.statusCode == 200 && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -249,8 +240,8 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         );
         setState(() {
           fotos.removeWhere((item) => _limpiar(item['id']) == idLimpio);
+          _procesarFotosYMarcadores();
         });
-        await _refrescarGaleria();
       }
     } catch (e) {
       if (mounted) {
@@ -276,9 +267,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
             fotos = nuevasFotos;
             _procesarFotosYMarcadores();
           });
-          // Pequeño delay para dejar que los marcadores se dibujen antes de ajustar cámara
-          Future.delayed(
-              const Duration(milliseconds: 300), _ajustarCamaraATodosLosPuntos);
+          Future.delayed(const Duration(milliseconds: 300), () {
+            _ajustarCamaraATodosLosPuntos();
+          });
         }
       }
     } catch (e) {
@@ -311,6 +302,10 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         Scaffold(
           backgroundColor: Colors.white,
           appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
             title: const Text("REPORTE FOTOGRÁFICO",
                 style: TextStyle(
                     fontSize: 15,
@@ -321,8 +316,9 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
             iconTheme: const IconThemeData(color: Colors.white),
             actions: [
               IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _refrescarGaleria),
+                icon: const Icon(Icons.refresh),
+                onPressed: _refrescarGaleria,
+              )
             ],
           ),
           body: _cargandoTiempos
@@ -341,6 +337,18 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                     ],
                   ],
                 ),
+          // ✅ El botón flotante ahora solo se renderiza si el nivel es 3.
+          floatingActionButton: _puedeTomarFoto()
+              ? FloatingActionButton(
+                  onPressed: () {
+                    // Acción cámara: Aquí deberías llamar a tu lógica de captura
+                    // o simplemente cerrar para que el usuario use la cámara del Dashboard.
+                    Navigator.pop(context, "take_photo");
+                  },
+                  backgroundColor: const Color(0xFF424949),
+                  child: const Icon(Icons.camera_alt, color: Colors.white),
+                )
+              : null,
         ),
         if (_actualizando)
           Container(
@@ -366,7 +374,10 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
 
   Widget _buildMapaSeccion() {
     final String nivelActual = _limpiar(widget.nivelId);
-    if (nivelActual == "3") return const SizedBox.shrink();
+    // Chofer (3) y Asistente (5) no ven mapa según tu lógica actual
+    if (nivelActual == "3" || nivelActual == "5") {
+      return const SizedBox.shrink();
+    }
 
     bool esWindows = Platform.isWindows;
     return Column(
@@ -375,7 +386,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          color: Colors.grey[100],
+          color: const Color(0xFFF5F5F5),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -383,7 +394,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
-                      color: Colors.black54)),
+                      color: Color(0xFF808080))),
               GestureDetector(
                 onTap: _ajustarCamaraATodosLosPuntos,
                 child: const Row(
@@ -405,7 +416,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
           height: 240,
           child: esWindows
               ? Container(
-                  color: Colors.grey[300],
+                  color: const Color(0xFFE0E0E0),
                   child: const Center(child: Text("Mapa no disponible")))
               : GoogleMap(
                   initialCameraPosition:
@@ -413,10 +424,12 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   markers: _markers,
                   myLocationButtonEnabled: true,
                   onMapCreated: (c) {
-                    if (!_controller.isCompleted) _controller.complete(c);
-                    // Ajuste inicial automático
-                    Future.delayed(const Duration(milliseconds: 600),
-                        _ajustarCamaraATodosLosPuntos);
+                    if (!_controller.isCompleted) {
+                      _controller.complete(c);
+                    }
+                    Future.delayed(const Duration(milliseconds: 600), () {
+                      _ajustarCamaraATodosLosPuntos();
+                    });
                   },
                 ),
         ),
@@ -429,7 +442,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
               Expanded(
                   child: Text(_direccionEscrita,
                       style: const TextStyle(
-                          fontSize: 11, color: Colors.black87))),
+                          fontSize: 11, color: Color(0xFF212121)))),
             ],
           ),
         ),
@@ -463,7 +476,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                     fit: BoxFit.cover,
                     width: double.infinity,
                     errorBuilder: (c, e, s) => Container(
-                        color: Colors.grey[100],
+                        color: const Color(0xFFF5F5F5),
                         child:
                             const Icon(Icons.broken_image, color: Colors.grey)),
                   ),
@@ -479,10 +492,11 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   child: ElevatedButton(
                     onPressed: () => _eliminarFoto(f["id"]),
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: const StadiumBorder()),
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: const StadiumBorder(),
+                    ),
                     child: const Text("ELIMINAR",
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 10)),

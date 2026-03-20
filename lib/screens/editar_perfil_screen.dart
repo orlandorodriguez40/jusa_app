@@ -35,7 +35,10 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    setState(() => _isSaving = true);
+
+    setState(() {
+      _isSaving = true;
+    });
 
     try {
       final response = await http.patch(
@@ -57,21 +60,28 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text("✅ Actualizado"), backgroundColor: Colors.green));
+            content: Text("✅ Perfil actualizado correctamente"),
+            backgroundColor: Colors.green));
+
         Navigator.pop(context, data["user"]);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text("❌ Error al guardar"), backgroundColor: Colors.red));
+            content: Text("❌ No se pudo guardar el perfil"),
+            backgroundColor: Colors.red));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Error de conexión: $e"),
+            backgroundColor: Colors.orange));
       }
     } finally {
       if (mounted) {
-        setState(() => _isSaving = false);
+        setState(() {
+          _isSaving = false;
+        });
       }
     }
   }
@@ -99,20 +109,31 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const Text("Actualiza tu información personal",
-                style: TextStyle(fontSize: 14, color: Colors.grey)),
-            const SizedBox(height: 25),
+            const Text(
+              "Información Personal",
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF424949)),
+            ),
+            const SizedBox(height: 30),
             TextFormField(
               controller: _nameCtrl,
+              textCapitalization: TextCapitalization.words,
               decoration: InputDecoration(
                 labelText: "Nombre Completo",
-                prefixIcon: const Icon(Icons.person),
+                prefixIcon: const Icon(Icons.person_outline),
                 border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      const BorderSide(color: Color(0xFF4CAF50), width: 2),
+                ),
               ),
               validator: (v) {
-                if (v == null || v.isEmpty) {
-                  return "Obligatorio";
+                if (v == null || v.trim().isEmpty) {
+                  return "El nombre es obligatorio";
                 }
                 return null;
               },
@@ -122,27 +143,33 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
               controller: _phoneCtrl,
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(
-                labelText: "Teléfono",
-                prefixIcon: const Icon(Icons.phone),
+                labelText: "Teléfono / WhatsApp",
+                prefixIcon: const Icon(Icons.phone_android),
                 border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      const BorderSide(color: Color(0xFF4CAF50), width: 2),
+                ),
               ),
               validator: (v) {
-                if (v == null || v.isEmpty) {
-                  return "Obligatorio";
+                if (v == null || v.trim().isEmpty) {
+                  return "El teléfono es obligatorio";
                 }
                 return null;
               },
             ),
             const SizedBox(height: 40),
             SizedBox(
-              height: 50,
+              height: 55,
               child: ElevatedButton(
                 onPressed: _isSaving ? null : _update,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _isSaving
                     ? const SizedBox(
@@ -150,13 +177,13 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
                         height: 24,
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2))
-                    : const Text("GUARDAR CAMBIOS",
+                    : const Text(
+                        "GUARDAR CAMBIOS",
                         style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16)),
+                            fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
               ),
-            )
+            ),
           ],
         ),
       ),

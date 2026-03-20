@@ -173,12 +173,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       debugPrint("Error Fetch: $e");
     } finally {
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+        });
       }
     }
   }
 
-  // --- LÓGICA DE FOTOS Y MARCA DE AGUA ---
+  // --- LÓGICA DE FOTOS Y UBICACIÓN ---
 
   Future<Position> _determinePosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -232,7 +234,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (photo == null || !mounted) {
       return;
     }
-    setState(() => _sendingPhoto = true);
+    setState(() {
+      _sendingPhoto = true;
+    });
     try {
       File markedFile = await _addWatermark(File(photo.path), pos);
       final request = http.MultipartRequest('POST',
@@ -250,7 +254,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _sendingPhoto = false);
+        setState(() {
+          _sendingPhoto = false;
+        });
       }
     }
   }
@@ -282,25 +288,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 usuario: _userData,
                 onPerfilActualizado: (datos) {
                   if (mounted) {
-                    setState(() => _userData = datos);
+                    setState(() {
+                      _userData = datos;
+                    });
                   }
                 })));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF424949),
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(_obtenerTituloEncabezado(),
-            style: const TextStyle(fontSize: 18, color: Colors.white)),
-      ),
-      body: Stack(
-        children: [
-          SafeArea(
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: Colors.white,
+          appBar: AppBar(
+            backgroundColor: const Color(0xFF424949),
+            centerTitle: true,
+            iconTheme: const IconThemeData(color: Colors.white),
+            title: Text(_obtenerTituloEncabezado(),
+                style: const TextStyle(fontSize: 18, color: Colors.white)),
+          ),
+          body: SafeArea(
             child: Column(
               children: [
                 const SizedBox(height: 15),
@@ -319,13 +327,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
           ),
-          if (_sendingPhoto) ...{
-            Container(
-                color: Colors.black26,
-                child: const Center(child: CircularProgressIndicator())),
-          },
-        ],
-      ),
+        ),
+        if (_sendingPhoto) ...{
+          Container(
+            color: Colors.white,
+            child: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Color(0xFF424949)),
+                  SizedBox(height: 20),
+                  Text("Procesando fotografía...",
+                      style: TextStyle(
+                          color: Color(0xFF424949),
+                          decoration: TextDecoration.none,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+          ),
+        },
+      ],
     );
   }
 
@@ -362,7 +385,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       nameKey: "name",
                       onChanged: (val) {
                         if (val != null) {
-                          setState(() => _selectedSupervisor = val);
+                          setState(() {
+                            _selectedSupervisor = val;
+                          });
                         }
                       })),
             ],
@@ -378,7 +403,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       nameKey: "nombre",
                       onChanged: (val) {
                         if (val != null) {
-                          setState(() => _selectedTipo = val);
+                          setState(() {
+                            _selectedTipo = val;
+                          });
                         }
                       })),
             ],
@@ -406,7 +433,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         margin: const EdgeInsets.all(4),
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-            color: Colors.grey[50],
+            color: const Color(0xFFF9F9F9),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Colors.blueGrey.shade100)),
         child: DropdownButtonHideUnderline(
@@ -419,9 +446,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       value: "0",
                       child: Text("TODOS ($label)",
                           style: const TextStyle(fontWeight: FontWeight.bold))),
-                  ...items.map((item) => DropdownMenuItem<String>(
-                      value: item[idKey].toString(),
-                      child: Text(item[nameKey] ?? "Sin nombre")))
+                  ...items.map((item) {
+                    return DropdownMenuItem<String>(
+                        value: item[idKey].toString(),
+                        child: Text(item[nameKey] ?? "Sin nombre"));
+                  })
                 ],
                 onChanged: onChanged)));
   }
@@ -462,7 +491,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _infoRow("Fecha:", asign["fecha"]),
                         _infoRow("Hora:", asign["hora"]),
                         _infoRow("Cliente:", asign["cliente"]),
-                        // --- PLAZA COLOCADA DESPUÉS DE CLIENTE ---
                         _infoRow("Plaza:", asign["plaza"]),
                         _infoRow("Ubicación:",
                             asign["ruta"] ?? asign["ubicacion"] ?? "S/D"),
@@ -472,12 +500,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   Column(
                     children: [
-                      if (widget.nivelId == 3 || widget.nivelId == 2) ...{
+                      // ✅ Bloque con LLAVES: Solo nivel 3 (Chofer)
+                      if (widget.nivelId == 3) ...{
                         IconButton(
                             icon: const Icon(Icons.camera_alt,
                                 color: Colors.green, size: 28),
                             onPressed: () => _takePhoto(asign)),
                       },
+                      // ✅ Bloque con LLAVES: Galería para niveles autorizados
                       if (widget.nivelId == 2 ||
                           widget.nivelId == 3 ||
                           widget.nivelId == 4 ||
