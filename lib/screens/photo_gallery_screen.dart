@@ -26,12 +26,9 @@ class PhotoGalleryScreen extends StatefulWidget {
 
 class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   late List<dynamic> fotos;
-  bool _cargandoTiempos = true;
+  bool _cargando = true;
   bool _actualizando = false;
   String _direccionEscrita = "Buscando dirección física...";
-
-  // Timer para que la UI se refresque y el botón desaparezca al cumplir el tiempo
-  Timer? _timerRefresco;
 
   final Completer<GoogleMapController> _controller =
       Completer<GoogleMapController>();
@@ -46,82 +43,18 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     fotos =
         widget.fotosServidor != null ? List.from(widget.fotosServidor!) : [];
     _inicializarPantalla();
-    _iniciarTimerRefresco();
-  }
-
-  @override
-  void dispose() {
-    _timerRefresco?.cancel();
-    super.dispose();
-  }
-
-  void _iniciarTimerRefresco() {
-    _timerRefresco = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
   }
 
   String _limpiar(dynamic valor) {
-    if (valor == null) {
-      return "";
-    }
+    if (valor == null) return "";
     return valor.toString().trim().replaceAll(RegExp(r'[\n\r\t]'), '');
   }
 
-  /// ✅ LÓGICA DE VALIDACIÓN CON ESCÁNER DE CAMPOS
-  bool _puedeEliminarFotoIndividual(dynamic foto) {
+  /// ✅ LÓGICA DE PERMISOS: Solo el nivel 5 (Asistente) puede eliminar.
+  /// El nivel 3 (Chofer) NO tiene permiso por orden del cliente.
+  bool _puedeEliminarFoto(dynamic foto) {
     final int nivelActual = int.tryParse(_limpiar(widget.nivelId)) ?? 0;
-
-    // Nivel 5 (Asistente) siempre tiene permiso
-    if (nivelActual == 5) {
-      return true;
-    }
-
-    // Nivel 3 (Chofer) validación por tiempo
-    if (nivelActual == 3) {
-      try {
-        // 1. 🔎 IMPRIMIMOS EL JSON PARA DESCUBRIR LOS NOMBRES DE LOS CAMPOS
-        debugPrint(
-            "🔎 [ANALISIS] Campos recibidos en foto ${foto['id']}: ${foto.keys.toList()}");
-        debugPrint("🔎 [CONTENIDO] Datos completos: $foto");
-
-        // 2. Intentamos capturar la fecha probando varios nombres posibles
-        String? rawFecha = foto["created_at"] ??
-            foto["fecha_registro"] ??
-            foto["fecha_creacion"] ??
-            (foto["fecha"] != null && foto["hora"] != null
-                ? "${foto["fecha"]} ${foto["hora"]}"
-                : null);
-
-        if (rawFecha == null || rawFecha.toLowerCase().contains("null")) {
-          debugPrint(
-              "❌ [ERROR] No se encontró ninguna fecha en los campos conocidos.");
-          return false;
-        }
-
-        // 3. Normalizamos y calculamos
-        String fechaLimpia = rawFecha.replaceAll('/', '-');
-        DateTime horaFoto = DateTime.parse(fechaLimpia);
-        DateTime ahora = DateTime.now();
-
-        int diferencia = ahora.difference(horaFoto).inSeconds;
-
-        // 4. Tolerancia de prueba (20 minutos = 1200 segundos)
-        bool esValido = diferencia < 1200 && diferencia > -1200;
-
-        debugPrint(
-            "⏱️ [TIEMPO] ID ${foto['id']} -> Diferencia: $diferencia seg. Visible: $esValido");
-
-        return esValido;
-      } catch (e) {
-        debugPrint("❌ [FALLO] Error procesando fecha: $e");
-        return false;
-      }
-    }
-
-    return false;
+    return nivelActual == 5;
   }
 
   bool _puedeTomarFoto() {
@@ -132,7 +65,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     _procesarFotosYMarcadores();
     if (mounted) {
       setState(() {
-        _cargandoTiempos = false;
+        _cargando = false;
       });
     }
   }
@@ -186,9 +119,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   Future<void> _ajustarCamaraATodosLosPuntos() async {
-    if (_markers.isEmpty) {
-      return;
-    }
+    if (_markers.isEmpty) return;
     final GoogleMapController controller = await _controller.future;
 
     double minLat = _markers.first.position.latitude;
@@ -197,18 +128,10 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
     double maxLng = _markers.first.position.longitude;
 
     for (Marker m in _markers) {
-      if (m.position.latitude < minLat) {
-        minLat = m.position.latitude;
-      }
-      if (m.position.latitude > maxLat) {
-        maxLat = m.position.latitude;
-      }
-      if (m.position.longitude < minLng) {
-        minLng = m.position.longitude;
-      }
-      if (m.position.longitude > maxLng) {
-        maxLng = m.position.longitude;
-      }
+      if (m.position.latitude < minLat) minLat = m.position.latitude;
+      if (m.position.latitude > maxLat) maxLat = m.position.latitude;
+      if (m.position.longitude < minLng) minLng = m.position.longitude;
+      if (m.position.longitude > maxLng) maxLng = m.position.longitude;
     }
 
     controller.animateCamera(
@@ -246,15 +169,6 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
   }
 
   Future<void> _eliminarFoto(dynamic foto) async {
-    if (!_puedeEliminarFotoIndividual(foto)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("❌ El tiempo para eliminar esta foto ha expirado."),
-            backgroundColor: Colors.red),
-      );
-      return;
-    }
-
     final bool? confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -274,9 +188,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       ),
     );
 
-    if (confirmar != true) {
-      return;
-    }
+    if (confirmar != true) return;
 
     setState(() => _actualizando = true);
     try {
@@ -303,9 +215,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
             .showSnackBar(const SnackBar(content: Text("❌ Error de red")));
       }
     } finally {
-      if (mounted) {
-        setState(() => _actualizando = false);
-      }
+      if (mounted) setState(() => _actualizando = false);
     }
   }
 
@@ -377,7 +287,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
               )
             ],
           ),
-          body: _cargandoTiempos
+          body: _cargando
               ? const Center(child: CircularProgressIndicator())
               : CustomScrollView(
                   slivers: [
@@ -394,9 +304,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                 ),
           floatingActionButton: _puedeTomarFoto()
               ? FloatingActionButton(
-                  onPressed: () {
-                    Navigator.pop(context, "take_photo");
-                  },
+                  onPressed: () => Navigator.pop(context, "take_photo"),
                   backgroundColor: const Color(0xFF424949),
                   child: const Icon(Icons.camera_alt, color: Colors.white),
                 )
@@ -404,7 +312,10 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         ),
         if (_actualizando)
           Container(
-            color: Colors.white,
+            // ✅ CORRECCIÓN: Reemplazado withOpacity(0.8) por un color sólido.
+            // He usado un gris muy claro sólido para evitar problemas de renderizado.
+            // Si prefieres que sea totalmente transparente, usa Colors.transparent.
+            color: const Color(0xFFEEEEEE),
             child: const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -426,10 +337,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
 
   Widget _buildMapaSeccion() {
     final int nivelActual = int.tryParse(_limpiar(widget.nivelId)) ?? 0;
-
-    if (nivelActual == 3) {
-      return const SizedBox.shrink();
-    }
+    if (nivelActual == 3) return const SizedBox.shrink();
 
     bool esWindows = Platform.isWindows;
     return Column(
@@ -476,9 +384,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   markers: _markers,
                   myLocationButtonEnabled: true,
                   onMapCreated: (c) {
-                    if (!_controller.isCompleted) {
-                      _controller.complete(c);
-                    }
+                    if (!_controller.isCompleted) _controller.complete(c);
                     Future.delayed(const Duration(milliseconds: 600), () {
                       _ajustarCamaraATodosLosPuntos();
                     });
@@ -514,8 +420,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       delegate: SliverChildBuilderDelegate((context, index) {
         final f = fotos[index];
         final url = "${PhotoGalleryScreen.baseImageUrl}${_limpiar(f["foto"])}";
-
-        final bool puedeBorrar = _puedeEliminarFotoIndividual(f);
+        final bool puedeBorrar = _puedeEliminarFoto(f);
 
         return Column(
           children: [
