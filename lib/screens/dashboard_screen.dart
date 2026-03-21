@@ -140,15 +140,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!mounted) {
       return;
     }
+
     setState(() {
       _loading = true;
       _asignaciones = [];
     });
 
+    // Limpieza de valores nulos o basura para evitar cierres de conexión
+    String c = (_selectedCliente == "null" || _selectedCliente.isEmpty)
+        ? "0"
+        : _selectedCliente;
+    String s = (_selectedSupervisor == "null" || _selectedSupervisor.isEmpty)
+        ? "0"
+        : _selectedSupervisor;
+    String t = (_selectedTipo == "null" || _selectedTipo.isEmpty)
+        ? "0"
+        : _selectedTipo;
+
     String apiUrl = "";
+
     if (widget.nivelId == 5) {
       apiUrl =
-          "https://sistema.jusaimpulsemkt.com/api/asignaciones-asistente-app/$_selectedCliente/$_selectedSupervisor/$_selectedTipo";
+          "https://sistema.jusaimpulsemkt.com/api/asignaciones-asistente-app/$c/$s/$t";
     } else {
       String path = "mis-asignaciones-app";
       if (widget.nivelId == 2) {
@@ -161,16 +174,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     try {
+      debugPrint("🚀 Consultando API: $apiUrl");
       final response = await http
           .get(Uri.parse(apiUrl))
           .timeout(const Duration(seconds: 15));
+
       if (response.statusCode == 200 && mounted) {
+        final Map<String, dynamic> data = json.decode(response.body);
         setState(() {
-          _asignaciones = json.decode(response.body)["datos"] ?? [];
+          _asignaciones = data["datos"] ?? [];
         });
+        debugPrint("✅ Registros cargados: ${_asignaciones.length}");
       }
     } catch (e) {
-      debugPrint("Error Fetch: $e");
+      debugPrint("❌ Error Fetch: $e");
     } finally {
       if (mounted) {
         setState(() {
@@ -330,7 +347,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         if (_sendingPhoto) ...{
           Container(
-            color: Colors.white,
+            color: const Color(0xFFEEEEEE),
             child: const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -429,6 +446,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       required String idKey,
       required String nameKey,
       required ValueChanged<String?> onChanged}) {
+    bool exists =
+        value == "0" || items.any((item) => item[idKey].toString() == value);
+    String effectiveValue = exists ? value : "0";
+
     return Container(
         margin: const EdgeInsets.all(4),
         padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -438,7 +459,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             border: Border.all(color: Colors.blueGrey.shade100)),
         child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
-                value: value,
+                value: effectiveValue,
                 isExpanded: true,
                 style: const TextStyle(fontSize: 12, color: Colors.black),
                 items: [
@@ -467,7 +488,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const Center(child: Text("No Hay Registros Disponibles"))
           ]));
     }
-
     return RefreshIndicator(
       onRefresh: _fetchAsignaciones,
       child: ListView.builder(
@@ -488,6 +508,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // --- CONSECUTIVO PARA TODOS LOS DASHBOARDS ---
+                        _infoRow("Reg:", (index + 1).toString(),
+                            highlight: true, customColor: Colors.blue.shade700),
                         _infoRow("Fecha:", asign["fecha"]),
                         _infoRow("Hora:", asign["hora"]),
                         _infoRow("Cliente:", asign["cliente"]),
@@ -500,23 +523,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   Column(
                     children: [
-                      // ✅ Bloque con LLAVES: Solo nivel 3 (Chofer)
                       if (widget.nivelId == 3) ...{
                         IconButton(
                             icon: const Icon(Icons.camera_alt,
                                 color: Colors.green, size: 28),
                             onPressed: () => _takePhoto(asign)),
                       },
-                      // ✅ Bloque con LLAVES: Galería para niveles autorizados
-                      if (widget.nivelId == 2 ||
-                          widget.nivelId == 3 ||
-                          widget.nivelId == 4 ||
-                          widget.nivelId == 5) ...{
-                        IconButton(
-                            icon: const Icon(Icons.photo_library,
-                                color: Colors.blue, size: 28),
-                            onPressed: () => _viewPhotos(asign)),
-                      },
+                      IconButton(
+                          icon: const Icon(Icons.photo_library,
+                              color: Colors.blue, size: 28),
+                          onPressed: () => _viewPhotos(asign)),
                     ],
                   ),
                 ],
@@ -528,7 +544,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _infoRow(String label, dynamic value, {bool highlight = false}) {
+  Widget _infoRow(String label, dynamic value,
+      {bool highlight = false, Color? customColor}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: RichText(
@@ -542,7 +559,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 text: "${value ?? 'N/A'}",
                 style: TextStyle(
                     fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
-                    color: highlight ? Colors.blueGrey : Colors.black87))
+                    color: customColor ??
+                        (highlight ? Colors.blueGrey : Colors.black87)))
           ])),
     );
   }
